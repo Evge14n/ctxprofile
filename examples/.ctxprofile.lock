@@ -1,0 +1,18 @@
+{
+  "ctxprofile_lock_version": 1,
+  "model": "claude-opus-4-8",
+  "estimator": "chars4-v1",
+  "static_input_tokens": 215,
+  "components": {
+    "system": 25,
+    "tool:read_file": 54,
+    "tool:write_file": 70,
+    "tool:web_search": 66
+  },
+  "tools": [
+    "read_file",
+    "web_search",
+    "write_file"
+  ],
+  "servers": []
+}

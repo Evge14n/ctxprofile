@@ -58,9 +58,27 @@ compare (A -> B)   model: claude-opus-4-8
   dead tools: ['web_search', 'write_file'] -> ['write_file']
 ```
 
-## Gate context cost in CI
+## Lock the context floor and gate it in CI
 
-Set a budget and fail the build when a request bloats or ships a dead tool.
+Treat your static context — the system prompt and the tool set you ship on every
+request — like a lockfile. Commit a baseline, and let CI fail any PR that raises
+it or adds a tool without a deliberate re-lock.
+
+```
+ctxprofile lock --from captures/agent-turn.json    # writes .ctxprofile.lock
+ctxprofile ci --lock .ctxprofile.lock captures/*.json
+```
+
+```
+FAIL captures/agent-turn.json
+  - static floor +410 tokens over lock (allowed +0)
+  - new tool(s) not in lock: web_search
+```
+
+Accepting a rise is a deliberate one-line commit: re-run `ctxprofile lock` and
+commit the new `.ctxprofile.lock`.
+
+You can also gate absolute cost and dead tools with a budget:
 
 `ctxbudget.toml`:
 
@@ -70,21 +88,17 @@ max_total_usd_cold = 0.05
 max_dead_tools = 0
 ```
 
-```
-ctxprofile ci --budget ctxbudget.toml captures/*.json
-```
-
-It exits `1` on any breach, so dropped into a GitHub Actions step it blocks the PR:
+Drop either into GitHub Actions; it exits `1` on any breach, so the step blocks the PR:
 
 ```yaml
-- run: ctxprofile ci --budget ctxbudget.toml captures/*.json
+- run: ctxprofile ci --budget ctxbudget.toml --lock .ctxprofile.lock captures/*.json
 ```
 
-```
-FAIL captures/agent-turn.json
-  - input tokens 24580 > 20000
-  - dead tools 1 > 0 (web_search)
-```
+Honest scope: the lock covers the **static floor** — the system prompt, the tool
+definitions, and the set of tools you ship — which lives in your repo. It does
+not lock per-request cost (RAG chunks, history, tool results); that is not in the
+repo and moves on every call. The gate fires on the delta of a stable estimator,
+so the estimator's bias cancels.
 
 ## What it does
 

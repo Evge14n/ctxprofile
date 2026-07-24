@@ -9,6 +9,7 @@ from typing import Any
 from ctxprofile.budget import check, load_budget
 from ctxprofile.compare import compare_payloads
 from ctxprofile.cost import analyze
+from ctxprofile.lockfile import build_lock, diff_lock, load_lock, static_summary, write_lock
 from ctxprofile.models import CostReport, ReportDiff
 
 
@@ -77,13 +78,36 @@ def _cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_lock(args: argparse.Namespace) -> int:
+    payload = json.loads(Path(args.from_capture).read_text(encoding="utf-8"))
+    request = payload.get("request", payload)
+    lock = build_lock(request, args.model or request.get("model"))
+    write_lock(lock, args.output)
+    print(
+        f"wrote {args.output}: {lock['static_input_tokens']} static tokens, "
+        f"{len(lock['tools'])} tools, {len(lock['servers'])} servers"
+    )
+    return 0
+
+
 def _cmd_ci(args: argparse.Namespace) -> int:
-    budget = load_budget(args.budget)
+    if not args.budget and not args.lock:
+        print("ci needs --budget and/or --lock")
+        return 2
+    budget = load_budget(args.budget) if args.budget else None
+    lock = load_lock(args.lock) if args.lock else None
     failures = 0
     for path in args.captures:
         payload = json.loads(Path(path).read_text(encoding="utf-8"))
-        report = analyze(payload, model_override=budget.model)
-        violations = check(report, budget)
+        request = payload.get("request", payload)
+        report = analyze(payload, model_override=budget.model if budget else None)
+        violations: list[str] = []
+        if budget:
+            violations += check(report, budget)
+        if lock:
+            violations += diff_lock(
+                static_summary(request), lock, args.max_regression, not args.allow_new_tools
+            )
         if violations:
             failures += 1
             print(f"FAIL {path}")
@@ -142,10 +166,27 @@ def build_parser() -> argparse.ArgumentParser:
     cmp.add_argument("--model", help="override the model id")
     cmp.set_defaults(func=_cmd_compare)
 
-    ci = sub.add_parser("ci", help="fail (exit 1) when a capture breaches a budget")
+    ci = sub.add_parser("ci", help="fail (exit 1) when a capture breaches a budget or lock")
     ci.add_argument("captures", nargs="+", help="capture JSON files to check")
-    ci.add_argument("--budget", required=True, help="path to a TOML budget file")
+    ci.add_argument("--budget", help="path to a TOML budget file")
+    ci.add_argument("--lock", help="path to a .ctxprofile.lock to check for regressions")
+    ci.add_argument(
+        "--max-regression",
+        type=int,
+        default=0,
+        dest="max_regression",
+        help="tokens the static floor may rise before failing",
+    )
+    ci.add_argument(
+        "--allow-new-tools", action="store_true", help="do not fail when a new tool appears"
+    )
     ci.set_defaults(func=_cmd_ci)
+
+    lk = sub.add_parser("lock", help="write a static-context-floor lock file")
+    lk.add_argument("--from", dest="from_capture", required=True, help="reference capture JSON")
+    lk.add_argument("-o", "--output", default=".ctxprofile.lock", help="lock file path")
+    lk.add_argument("--model", help="model id to record")
+    lk.set_defaults(func=_cmd_lock)
     return parser
 
 
