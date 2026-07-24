@@ -18,6 +18,28 @@ def _billed_input(usage: dict[str, Any] | None) -> int | None:
     )
 
 
+def _effective_rate(usage: dict[str, Any] | None, model: str) -> tuple[float, bool]:
+    """Blended $/token for the input side, from the actual cold/cache-write/cache-read
+    split in usage. Returns (rate_per_token, cached). Falls back to the cold rate."""
+    cold = pricing.rate_per_mtok(model, "input") / 1_000_000
+    if not usage:
+        return cold, False
+    fresh = int(usage.get("input_tokens", 0))
+    created = int(usage.get("cache_creation_input_tokens", 0))
+    read = int(usage.get("cache_read_input_tokens", 0))
+    split = usage.get("cache_creation") or {}
+    if split:
+        write_5m = int(split.get("ephemeral_5m_input_tokens", 0))
+        write_1h = int(split.get("ephemeral_1h_input_tokens", 0))
+    else:
+        write_5m, write_1h = created, 0
+    total = fresh + created + read
+    if total <= 0:
+        return cold, False
+    billed = pricing.billed_input_usd(model, fresh, write_5m, write_1h, read)
+    return billed / total, created > 0 or read > 0
+
+
 def build_report(
     components: list[Component],
     defined: set[str],
@@ -43,15 +65,19 @@ def build_report(
         scaled[biggest] = max(0, scaled[biggest] + remainder)
     grand = sum(scaled) or 1
 
+    eff_rate, cached = _effective_rate(usage, model)
     dead = sorted(defined - called)
     rows: list[ComponentCost] = []
     wasted = 0.0
     total_cold = 0.0
+    total_effective = 0.0
     for component, token_count in zip(components, scaled, strict=True):
         usd_cold = pricing.usd(token_count, model, "input")
         usd_cached = pricing.usd(token_count, model, "cache_read")
+        usd_effective = token_count * eff_rate
         unused = component.kind == KIND_TOOL_DEF and component.name in dead
         total_cold += usd_cold
+        total_effective += usd_effective
         if unused:
             wasted += usd_cold
         rows.append(
@@ -62,12 +88,15 @@ def build_report(
                 pct=100.0 * token_count / grand,
                 usd_cold=usd_cold,
                 usd_cached=usd_cached,
+                usd_effective=usd_effective,
                 unused=unused,
             )
         )
 
     rows.sort(key=lambda r: r.usd_cold, reverse=True)
-    return CostReport(model, grand, reconciled, rows, dead, wasted, total_cold)
+    return CostReport(
+        model, grand, reconciled, rows, dead, wasted, total_cold, total_effective, cached
+    )
 
 
 def analyze(payload: dict[str, Any], model_override: str | None = None) -> CostReport:

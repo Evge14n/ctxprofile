@@ -14,6 +14,14 @@ CACHE_WRITE_5M = 1.25
 CACHE_WRITE_1H = 2.0
 CACHE_READ = 0.1
 
+# Minimum prompt-cacheable prefix length (tokens). A prefix shorter than this
+# never caches, so a small static floor below it is not a caching regression.
+MODEL_MIN_CACHE_TOKENS: dict[str, int] = {
+    "claude-opus-4-8": 1024,
+    "claude-sonnet-5": 1024,
+    "claude-haiku-4-5": 2048,
+}
+
 _MODES = {"input", "output", "cache_write_5m", "cache_write_1h", "cache_read"}
 
 
@@ -42,3 +50,24 @@ def rate_per_mtok(model: str, mode: str = "input") -> float:
 
 def usd(tokens: float, model: str, mode: str = "input") -> float:
     return tokens / 1_000_000 * rate_per_mtok(model, mode)
+
+
+def billed_input_usd(
+    model: str,
+    input_tokens: int,
+    cache_write_5m: int = 0,
+    cache_write_1h: int = 0,
+    cache_read: int = 0,
+) -> float:
+    """Actual dollars for the input side of a request, given how many tokens were
+    freshly read, written to cache, and read from cache."""
+    return (
+        usd(input_tokens, model, "input")
+        + usd(cache_write_5m, model, "cache_write_5m")
+        + usd(cache_write_1h, model, "cache_write_1h")
+        + usd(cache_read, model, "cache_read")
+    )
+
+
+def min_cache_tokens(model: str) -> int:
+    return MODEL_MIN_CACHE_TOKENS.get(model, 1024)

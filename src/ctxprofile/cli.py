@@ -27,7 +27,9 @@ def format_report(report: CostReport) -> str:
             f"{row.usd_cold:>10.5f}{row.usd_cached:>10.5f}{flag}"
         )
     lines.append("")
-    lines.append(f"  total $ (cold input): {report.total_usd_cold:.5f}")
+    lines.append(f"  total $ (cold, uncached upper bound): {report.total_usd_cold:.5f}")
+    if report.cached:
+        lines.append(f"  total $ (measured, blended cache):    {report.total_usd_effective:.5f}")
     if report.dead_tools:
         names = ", ".join(report.dead_tools)
         lines.append(
@@ -133,7 +135,9 @@ def _report_dict(report: CostReport) -> dict[str, Any]:
         "model": report.model,
         "total_tokens": report.total_tokens,
         "reconciled": report.reconciled,
+        "cached": report.cached,
         "total_usd_cold": report.total_usd_cold,
+        "total_usd_effective": report.total_usd_effective,
         "dead_tools": report.dead_tools,
         "wasted_usd_cold": report.wasted_usd_cold,
         "components": [
@@ -144,6 +148,7 @@ def _report_dict(report: CostReport) -> dict[str, Any]:
                 "pct": r.pct,
                 "usd_cold": r.usd_cold,
                 "usd_cached": r.usd_cached,
+                "usd_effective": r.usd_effective,
                 "unused": r.unused,
             }
             for r in report.components
