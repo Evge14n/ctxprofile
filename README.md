@@ -1,5 +1,7 @@
 # ctxprofile
 
+[![ci](https://github.com/Evge14n/ctxprofile/actions/workflows/ci.yml/badge.svg)](https://github.com/Evge14n/ctxprofile/actions/workflows/ci.yml)
+
 **An offline CLI that costs a single LLM request per context component — and flags the tool definitions you ship on every request but never call.**
 
 You know your agent's requests are expensive. `ctxprofile` tells you *which part of the context* is spending the money: each individual tool schema, the system prompt, each history turn, each tool result — in tokens **and dollars** — from one captured request, with no proxy and no network.
@@ -56,7 +58,7 @@ Tokens per component come from a stable offline heuristic (~4 chars/token). That
 
 ## Prior art
 
-Context attribution is not a new idea. [context-lens](https://github.com/) and ContextSpy are live proxies with dashboards that break a request into components; `context-profiler` is an offline CLI for token distribution. `ctxprofile` is deliberately narrow and complementary: it is offline (no proxy to run), it reports **dollars** rather than only tokens, it splits **per individual tool** rather than one "tool definitions" blob, and it names **dead tools**. Use a proxy dashboard for a live feed; use `ctxprofile` in a script or CI to cost and lint a single captured request.
+Context attribution is not a new idea. `context-lens` and `ContextSpy` are live proxies with dashboards that break a request into components; `context-profiler` is an offline CLI for token distribution. `ctxprofile` is deliberately narrow and complementary: it is offline (no proxy to run), it reports **dollars** rather than only tokens, it splits **per individual tool** rather than one "tool definitions" blob, and it names **dead tools**. Use a proxy dashboard for a live feed; use `ctxprofile` in a script or CI to cost and lint a single captured request.
 
 ## Roadmap
 
