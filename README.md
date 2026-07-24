@@ -33,6 +33,21 @@ pip install ctxprofile
 
 Python 3.11+. Zero runtime dependencies.
 
+## Capture real requests
+
+Point your Claude client at the built-in proxy and it tees every non-streaming
+`/v1/messages` request and response to a file — the input the rest of the
+commands read. Only the bodies are stored, so your API key never lands on disk.
+
+```
+ctxprofile capture --port 8787 --out captures/
+# then, in your client:
+ANTHROPIC_BASE_URL=http://127.0.0.1:8787 claude -p "refactor auth.py"
+```
+
+Stdlib only, no certificate interception (plaintext localhost in, TLS out).
+Streaming responses are stored raw; reassembly is on the roadmap.
+
 ## Use
 
 Capture one request/response pair as JSON (the raw Anthropic Messages API request, optionally with the response so costs reconcile to the real `usage`), then:
@@ -144,6 +159,7 @@ Context attribution is not a new idea. `context-lens` and `ContextSpy` are live 
 
 ## Roadmap
 
+- Streaming (SSE) response reassembly in `capture`.
 - Cache-churn cost: attribute a rebuilt cache prefix to the component that invalidated it (needs two sequential captures).
 - RAG-chunk attribution when retrieved context is tagged.
 - Optional exact per-component counts via the `count_tokens` endpoint.

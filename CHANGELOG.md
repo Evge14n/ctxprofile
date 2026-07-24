@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0
+
+- `capture` command: a stdlib forward-proxy. Point a Claude client at it with
+  `ANTHROPIC_BASE_URL` and it tees every non-streaming `/v1/messages` request and
+  response to a capture file — the input every other command reads. Only bodies
+  are stored, never headers, so the API key never lands on disk.
+
 ## 0.4.0
 
 - `mcp-audit` command: join tool schema tokens (from a raw request) with call
