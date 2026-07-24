@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from ctxprofile.budget import check, load_budget
 from ctxprofile.compare import compare_payloads
 from ctxprofile.cost import analyze
 from ctxprofile.models import CostReport, ReportDiff
@@ -76,6 +77,23 @@ def _cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_ci(args: argparse.Namespace) -> int:
+    budget = load_budget(args.budget)
+    failures = 0
+    for path in args.captures:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        report = analyze(payload, model_override=budget.model)
+        violations = check(report, budget)
+        if violations:
+            failures += 1
+            print(f"FAIL {path}")
+            for violation in violations:
+                print(f"  - {violation}")
+        else:
+            print(f"ok   {path}")
+    return 1 if failures else 0
+
+
 def _cmd_analyze(args: argparse.Namespace) -> int:
     payload = json.loads(Path(args.payload).read_text(encoding="utf-8"))
     report = analyze(payload, model_override=args.model)
@@ -123,6 +141,11 @@ def build_parser() -> argparse.ArgumentParser:
     cmp.add_argument("after", help="path to the changed capture JSON")
     cmp.add_argument("--model", help="override the model id")
     cmp.set_defaults(func=_cmd_compare)
+
+    ci = sub.add_parser("ci", help="fail (exit 1) when a capture breaches a budget")
+    ci.add_argument("captures", nargs="+", help="capture JSON files to check")
+    ci.add_argument("--budget", required=True, help="path to a TOML budget file")
+    ci.set_defaults(func=_cmd_ci)
     return parser
 
 

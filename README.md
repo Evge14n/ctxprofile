@@ -58,6 +58,34 @@ compare (A -> B)   model: claude-opus-4-8
   dead tools: ['web_search', 'write_file'] -> ['write_file']
 ```
 
+## Gate context cost in CI
+
+Set a budget and fail the build when a request bloats or ships a dead tool.
+
+`ctxbudget.toml`:
+
+```toml
+max_input_tokens = 20000
+max_total_usd_cold = 0.05
+max_dead_tools = 0
+```
+
+```
+ctxprofile ci --budget ctxbudget.toml captures/*.json
+```
+
+It exits `1` on any breach, so dropped into a GitHub Actions step it blocks the PR:
+
+```yaml
+- run: ctxprofile ci --budget ctxbudget.toml captures/*.json
+```
+
+```
+FAIL captures/agent-turn.json
+  - input tokens 24580 > 20000
+  - dead tools 1 > 0 (web_search)
+```
+
 ## What it does
 
 - **Per-component dollars.** Splits the request into `system`, one row **per named tool**, `history`, `tool_result`, and `current_user`, and prices each with the standard Claude rates. Existing tools count tokens; the cost is what you actually pay.
@@ -75,7 +103,6 @@ Context attribution is not a new idea. `context-lens` and `ContextSpy` are live 
 
 ## Roadmap
 
-- A CI budget gate (`ctxprofile ci --budget`) that fails a build when per-request cost regresses or a dead tool appears.
 - Cache-churn cost: attribute a rebuilt cache prefix to the component that invalidated it (needs two sequential captures).
 - RAG-chunk attribution when retrieved context is tagged.
 - Optional exact per-component counts via the `count_tokens` endpoint.

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0
+
+- `compare` command: token and dollar deltas between two captured requests,
+  so you can see exactly what a prompt or tool change costs.
+- `ci` command: fail (exit 1) when a capture breaches a TOML budget
+  (`max_input_tokens`, `max_total_usd_cold`, `max_dead_tools`,
+  `max_wasted_usd_cold`) — drop it into CI to block context bloat and dead tools.
+
 ## 0.1.0
 
 First release.
