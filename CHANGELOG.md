@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0
+
+- `capture` reassembles streaming (SSE) responses into a normal message with
+  merged `usage` (input side from `message_start`, final `output_tokens` from
+  `message_delta`) and rejoined text / tool_use content, so streamed requests —
+  the common Claude Code / SDK case — become usable by `analyze`. Non-stream and
+  non-JSON bodies are unchanged.
+
 ## 0.7.1
 
 - Fix (correctness): reconciliation now apportions the billed total with the

@@ -7,7 +7,23 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from ctxprofile.capture import build_record, serve, write_capture
+from ctxprofile.capture import build_record, reassemble_sse, serve, write_capture
+
+SSE = (
+    'event: message_start\n'
+    'data: {"type":"message_start","message":{"id":"msg_s","model":"claude-opus-4-8",'
+    '"usage":{"input_tokens":50,"cache_read_input_tokens":10,"output_tokens":1}}}\n\n'
+    'event: content_block_start\n'
+    'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n'
+    'event: content_block_delta\n'
+    'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}\n\n'
+    'event: content_block_delta\n'
+    'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" world"}}\n\n'
+    'event: message_delta\n'
+    'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":8}}\n\n'
+    'event: message_stop\n'
+    'data: {"type":"message_stop"}\n'
+)
 
 CANNED = {
     "id": "msg_test",
@@ -43,6 +59,29 @@ def test_write_capture_sanitizes_malicious_id(tmp_path: Path) -> None:
     path = write_capture(tmp_path, record)
     assert tmp_path.resolve() in path.resolve().parents
     assert ".." not in path.name
+
+
+def test_reassemble_sse_merges_usage_and_text() -> None:
+    message = reassemble_sse(SSE)
+    assert message is not None
+    assert message["id"] == "msg_s"
+    assert message["usage"]["input_tokens"] == 50
+    assert message["usage"]["cache_read_input_tokens"] == 10
+    assert message["usage"]["output_tokens"] == 8
+    assert message["content"][0]["text"] == "Hello world"
+
+
+def test_build_record_reassembles_a_stream() -> None:
+    record = build_record("/v1/messages", b'{"model": "m"}', SSE.encode("utf-8"), "t")
+    assert record.get("response_reassembled") is True
+    assert record["response"]["usage"]["output_tokens"] == 8
+    assert "response_raw" not in record
+
+
+def test_build_record_keeps_non_sse_raw() -> None:
+    record = build_record("/v1/messages", b"{}", b"neither json nor sse", "t")
+    assert "response_raw" in record
+    assert "response" not in record
 
 
 class _MockUpstream(BaseHTTPRequestHandler):
