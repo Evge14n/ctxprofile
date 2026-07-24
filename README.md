@@ -171,6 +171,8 @@ Owning the boundary is the point. Numbers are labelled by how much you can trust
 | Per-request dynamic cost (history, RAG, tool results) | Not locked — it moves per call and isn't in your repo |
 | Cache-churn attribution | Not built — needs sequential, timestamped captures ([roadmap](#roadmap)) |
 
+The full reasoning is in [docs/design.md](docs/design.md).
+
 ## Prior art
 
 Context attribution is not a new idea. `context-lens` and `ContextSpy` are live proxies with dashboards that break a request into components; `context-profiler` is an offline CLI for token distribution. `ctxprofile` is deliberately narrow and complementary: it is offline (no proxy to run), it reports **dollars** rather than only tokens, it splits **per individual tool** rather than one "tool definitions" blob, and it names **dead tools**. Use a proxy dashboard for a live feed; use `ctxprofile` in a script or CI to cost and lint a single captured request.
