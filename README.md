@@ -147,6 +147,25 @@ mcp-audit   model: claude-opus-4-8   window: 3 model calls
 carry the call counts). It reports a call **rate over a stated window**, never a
 boolean "dead" — a tool used once a week looks unused in a short trace.
 
+## Use it from an agent (MCP server)
+
+ctxprofile ships an optional MCP server, so a Claude agent can profile its own
+requests. Install the extra and register it:
+
+```
+pip install "ctxprofile[mcp]"
+```
+
+Then add it to your MCP client (e.g. Claude Code):
+
+```json
+{ "mcpServers": { "ctxprofile": { "command": "ctxprofile-mcp" } } }
+```
+
+It exposes two tools — `analyze_request` (cost a captured request per component)
+and `audit_mcp_servers` (dead-tool cost by server). The core CLI stays
+dependency-free; only this optional server needs `mcp`.
+
 ## What it does
 
 - **Per-component dollars.** Splits the request into `system`, one row **per named tool**, `history`, `tool_result`, and `current_user`, and prices each with the standard Claude rates. Existing tools count tokens; the cost is what you actually pay.

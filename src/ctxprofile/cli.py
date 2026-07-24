@@ -4,7 +4,6 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any
 
 from ctxprofile import __version__
 from ctxprofile.budget import check, load_budget
@@ -15,6 +14,7 @@ from ctxprofile.ingest_sdk import parse_trace_file
 from ctxprofile.lockfile import build_lock, diff_lock, load_lock, static_summary, write_lock
 from ctxprofile.mcp_audit import AuditReport, audit
 from ctxprofile.models import STATIC_KINDS, CostReport, ReportDiff
+from ctxprofile.serialize import report_to_dict
 
 
 def format_report(report: CostReport) -> str:
@@ -206,36 +206,10 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
     payload = json.loads(Path(args.payload).read_text(encoding="utf-8"))
     report = analyze(payload, model_override=args.model)
     if args.json:
-        print(json.dumps(_report_dict(report), ensure_ascii=False, indent=2))
+        print(json.dumps(report_to_dict(report), ensure_ascii=False, indent=2))
     else:
         print(format_report(report))
     return 0
-
-
-def _report_dict(report: CostReport) -> dict[str, Any]:
-    return {
-        "model": report.model,
-        "total_tokens": report.total_tokens,
-        "reconciled": report.reconciled,
-        "cached": report.cached,
-        "total_usd_cold": report.total_usd_cold,
-        "total_usd_effective": report.total_usd_effective,
-        "dead_tools": report.dead_tools,
-        "wasted_usd_cold": report.wasted_usd_cold,
-        "components": [
-            {
-                "name": r.name,
-                "kind": r.kind,
-                "tokens": r.tokens,
-                "pct": r.pct,
-                "usd_cold": r.usd_cold,
-                "usd_cached": r.usd_cached,
-                "usd_effective": r.usd_effective,
-                "unused": r.unused,
-            }
-            for r in report.components
-        ],
-    }
 
 
 def build_parser() -> argparse.ArgumentParser:
