@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from ctxprofile import __version__
 from ctxprofile.budget import check, load_budget
 from ctxprofile.capture import serve
 from ctxprofile.compare import compare_payloads
@@ -239,6 +240,7 @@ def _report_dict(report: CostReport) -> dict[str, Any]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ctxprofile")
+    parser.add_argument("--version", action="version", version=f"ctxprofile {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
     an = sub.add_parser("analyze", help="cost-attribute one captured request")
     an.add_argument("payload", help="path to a captured request JSON (or {request, response})")
