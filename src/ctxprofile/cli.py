@@ -13,7 +13,7 @@ from ctxprofile.cost import analyze
 from ctxprofile.ingest_sdk import parse_trace_file
 from ctxprofile.lockfile import build_lock, diff_lock, load_lock, static_summary, write_lock
 from ctxprofile.mcp_audit import AuditReport, audit
-from ctxprofile.models import CostReport, ReportDiff
+from ctxprofile.models import STATIC_KINDS, CostReport, ReportDiff
 
 
 def format_report(report: CostReport) -> str:
@@ -50,22 +50,31 @@ def _pct(a: float, b: float) -> str:
     return f"{(b - a) / a * 100:+.0f}%"
 
 
-def format_diff(diff: ReportDiff) -> str:
+def format_diff(diff: ReportDiff, monthly_requests: int | None = None) -> str:
     delta = diff.total_usd_cold_b - diff.total_usd_cold_a
+    static_delta = sum(r.delta_usd_cold for r in diff.rows if r.kind in STATIC_KINDS)
+    dynamic_delta = sum(r.delta_usd_cold for r in diff.rows if r.kind not in STATIC_KINDS)
     lines = [
         f"compare (A -> B)   model: {diff.model}",
         (
             f"  total $ (cold): {diff.total_usd_cold_a:.5f} -> {diff.total_usd_cold_b:.5f}"
             f"   ({delta:+.5f}, {_pct(diff.total_usd_cold_a, diff.total_usd_cold_b)})"
         ),
-        "",
-        f"  {'component':<22}{'Δ tokens':>10}{'Δ $ cold':>12}  note",
     ]
+    if monthly_requests:
+        lines.append(f"  at {monthly_requests:,} requests/mo: {delta * monthly_requests:+,.2f} $/mo")
+    lines += ["", f"  {'component':<22}{'Δ tokens':>10}{'Δ $ cold':>12}  note"]
     for row in diff.rows:
         if row.delta_tokens == 0 and abs(row.delta_usd_cold) < 1e-9:
             continue
         lines.append(
             f"  {row.name[:21]:<22}{row.delta_tokens:>+10}{row.delta_usd_cold:>+12.5f}  {row.status}"
+        )
+    if abs(dynamic_delta) > 1e-9:
+        lines.append("")
+        lines.append(
+            f"  note: {dynamic_delta:+.5f} of this delta is dynamic (history/tool_result), which "
+            f"moves per request; the static (system + tools) delta is {static_delta:+.5f}"
         )
     if diff.dead_tools_a != diff.dead_tools_b:
         lines.append("")
@@ -79,7 +88,7 @@ def _cmd_compare(args: argparse.Namespace) -> int:
     payload_a = json.loads(Path(args.before).read_text(encoding="utf-8"))
     payload_b = json.loads(Path(args.after).read_text(encoding="utf-8"))
     diff = compare_payloads(payload_a, payload_b, model_override=args.model)
-    print(format_diff(diff))
+    print(format_diff(diff, monthly_requests=args.monthly_requests))
     return 0
 
 
@@ -222,6 +231,12 @@ def build_parser() -> argparse.ArgumentParser:
     cmp.add_argument("before", help="path to the baseline capture JSON")
     cmp.add_argument("after", help="path to the changed capture JSON")
     cmp.add_argument("--model", help="override the model id")
+    cmp.add_argument(
+        "--monthly-requests",
+        type=int,
+        dest="monthly_requests",
+        help="project the $ delta to this monthly request volume",
+    )
     cmp.set_defaults(func=_cmd_compare)
 
     ci = sub.add_parser("ci", help="fail (exit 1) when a capture breaches a budget or lock")

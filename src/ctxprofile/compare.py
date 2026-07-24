@@ -18,7 +18,9 @@ def diff_reports(a: CostReport, b: CostReport) -> ReportDiff:
         usd_a = ca.usd_cold if ca else 0.0
         usd_b = cb.usd_cold if cb else 0.0
         status = "removed" if ca and not cb else "added" if cb and not ca else ""
-        rows.append(ComponentDelta(name, tokens_b - tokens_a, usd_b - usd_a, status))
+        present = cb or ca
+        kind = present.kind if present is not None else ""
+        rows.append(ComponentDelta(name, kind, tokens_b - tokens_a, usd_b - usd_a, status))
     rows.sort(key=lambda r: abs(r.delta_usd_cold), reverse=True)
     return ReportDiff(
         model=b.model,

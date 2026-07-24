@@ -38,3 +38,23 @@ def test_cli_compare(capsys) -> None:
     out = capsys.readouterr().out
     assert "compare" in out
     assert "web_search" in out
+
+
+def test_cli_compare_monthly_projection(capsys) -> None:
+    rc = main(
+        [
+            "compare",
+            str(FIXTURES / "capture.json"),
+            str(FIXTURES / "capture_b.json"),
+            "--monthly-requests",
+            "1000000",
+        ]
+    )
+    assert rc == 0
+    assert "$/mo" in capsys.readouterr().out
+
+
+def test_component_delta_carries_kind() -> None:
+    diff = compare_payloads(_load("capture.json"), _load("capture_b.json"))
+    web = next(r for r in diff.rows if r.name == "web_search")
+    assert web.kind == "tool_def"
