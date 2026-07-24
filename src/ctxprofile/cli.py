@@ -9,7 +9,9 @@ from typing import Any
 from ctxprofile.budget import check, load_budget
 from ctxprofile.compare import compare_payloads
 from ctxprofile.cost import analyze
+from ctxprofile.ingest_sdk import parse_trace_file
 from ctxprofile.lockfile import build_lock, diff_lock, load_lock, static_summary, write_lock
+from ctxprofile.mcp_audit import AuditReport, audit
 from ctxprofile.models import CostReport, ReportDiff
 
 
@@ -77,6 +79,42 @@ def _cmd_compare(args: argparse.Namespace) -> int:
     payload_b = json.loads(Path(args.after).read_text(encoding="utf-8"))
     diff = compare_payloads(payload_a, payload_b, model_override=args.model)
     print(format_diff(diff))
+    return 0
+
+
+def format_audit(report: AuditReport, min_calls: int = 1) -> str:
+    lines = [
+        f"mcp-audit   model: {report.model}   window: {report.window_api_calls} model calls",
+        "",
+        f"  {'server':<26}{'tools':>6}{'tok/req':>9}{'calls':>7}{'$/req cold':>12}",
+    ]
+    for server in report.servers:
+        lines.append(
+            f"  {server.server[:25]:<26}{server.tool_count:>6}{server.tokens_per_request:>9}"
+            f"{server.calls:>7}{server.usd_per_request_cold:>12.5f}"
+        )
+    unused = [s for s in report.servers if s.calls < min_calls]
+    if unused:
+        lines.append("")
+        for server in unused:
+            lines.append(
+                f"  {server.server}: {server.tokens_per_request} tok/req, {server.calls} calls "
+                f"in {report.window_api_calls} model calls — ${server.usd_per_request_cold:.5f} "
+                f"shipped every request"
+            )
+        lines.append(
+            f"  [window: {report.window_api_calls} model calls — a rarely used tool can look "
+            f"unused in a short window]"
+        )
+    return "\n".join(lines)
+
+
+def _cmd_mcp_audit(args: argparse.Namespace) -> int:
+    defs = json.loads(Path(args.defs).read_text(encoding="utf-8"))
+    request = defs.get("request", defs)
+    traces = [parse_trace_file(path) for path in args.traces]
+    report = audit(request, traces, model_override=args.model)
+    print(format_audit(report, min_calls=args.min_calls))
     return 0
 
 
@@ -192,6 +230,19 @@ def build_parser() -> argparse.ArgumentParser:
     lk.add_argument("-o", "--output", default=".ctxprofile.lock", help="lock file path")
     lk.add_argument("--model", help="model id to record")
     lk.set_defaults(func=_cmd_lock)
+
+    ma = sub.add_parser("mcp-audit", help="dead-tool cost by MCP server over a trace corpus")
+    ma.add_argument("--defs", required=True, help="a raw request that declares the tools")
+    ma.add_argument("--traces", nargs="+", required=True, help="SDK / claude -p JSONL trace files")
+    ma.add_argument(
+        "--min-calls",
+        type=int,
+        default=1,
+        dest="min_calls",
+        help="a server with fewer calls than this is flagged as unused",
+    )
+    ma.add_argument("--model", help="override the model id")
+    ma.set_defaults(func=_cmd_mcp_audit)
     return parser
 
 

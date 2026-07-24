@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0
+
+- `mcp-audit` command: join tool schema tokens (from a raw request) with call
+  counts (from a Claude Agent SDK / `claude -p` JSONL trace corpus) to show
+  dead-tool cost grouped by MCP server — the shipped-but-never-called servers
+  that quietly cost tokens on every request.
+- SDK / `claude -p` stream-json ingestor (`ingest_sdk`): normalizes a run into a
+  `Trace` (declared tools, called tools, api calls, total cost).
+- Cache-aware effective pricing: when a `usage` block carries a cache split,
+  report the blended measured cost alongside the cold uncached upper bound.
+
 ## 0.3.0
 
 - `lock` command: write a `.ctxprofile.lock` recording the static context floor

@@ -1,0 +1,29 @@
+{
+  "model": "claude-opus-4-8",
+  "system": "You are a coding agent.",
+  "tools": [
+    {
+      "name": "mcp__ruflo__agent_spawn",
+      "description": "Spawn a ruflo agent with a role and a prompt, returning its id so later steps can coordinate with it across the swarm.",
+      "input_schema": {"type": "object", "properties": {"role": {"type": "string"}, "prompt": {"type": "string"}}, "required": ["role"]}
+    },
+    {
+      "name": "mcp__ruflo__agent_list",
+      "description": "List every currently running ruflo agent with its id, role, status, and the task it is working on right now.",
+      "input_schema": {"type": "object", "properties": {}}
+    },
+    {
+      "name": "mcp__files__read",
+      "description": "Read a UTF-8 text file and return its contents.",
+      "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}
+    },
+    {
+      "name": "read_file",
+      "description": "Read a local file.",
+      "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}
+    }
+  ],
+  "messages": [
+    {"role": "user", "content": "List the project files."}
+  ]
+}
