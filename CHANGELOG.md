@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- `lock` command: write a `.ctxprofile.lock` recording the static context floor
+  (system prompt, per-tool-definition tokens, the shipped tool set, and MCP
+  servers), like a lockfile for context.
+- `ci --lock`: fail when the static floor regresses past a threshold or a new
+  tool appears without a deliberate re-lock. Combines with `--budget`.
+- `examples/` with a runnable capture, budget, and lock.
+
 ## 0.2.0
 
 - `compare` command: token and dollar deltas between two captured requests,

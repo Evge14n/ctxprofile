@@ -1,0 +1,3 @@
+max_input_tokens = 20000
+max_total_usd_cold = 0.05
+max_dead_tools = 0
