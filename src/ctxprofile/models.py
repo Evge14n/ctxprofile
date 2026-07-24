@@ -25,6 +25,7 @@ class ComponentCost:
     pct: float
     usd_cold: float
     usd_cached: float
+    usd_effective: float
     unused: bool = False
 
 
@@ -37,6 +38,8 @@ class CostReport:
     dead_tools: list[str]
     wasted_usd_cold: float
     total_usd_cold: float
+    total_usd_effective: float
+    cached: bool
 
 
 @dataclass(frozen=True)
