@@ -55,3 +55,22 @@ def test_model_override() -> None:
     del payload["request"]["model"]
     report = analyze(payload, model_override="claude-haiku-4-5")
     assert report.model == "claude-haiku-4-5"
+
+
+def test_reconciliation_is_exact_when_estimator_overshoots_billed() -> None:
+    # Many components estimated far above a tiny billed total: the split must still
+    # sum to the billed total with no negative components.
+    request = {
+        "model": "claude-opus-4-8",
+        "system": "x" * 200,
+        "tools": [
+            {"name": f"t{i}", "description": "y" * 200, "input_schema": {}} for i in range(9)
+        ],
+        "messages": [{"role": "user", "content": "hi"}],
+    }
+    payload = {"request": request, "response": {"usage": {"input_tokens": 6}}}
+    report = analyze(payload)
+    assert report.reconciled
+    assert report.total_tokens == 6
+    assert sum(c.tokens for c in report.components) == 6
+    assert all(c.tokens >= 0 for c in report.components)

@@ -19,8 +19,8 @@ model: claude-opus-4-8   input tokens: 900   exact $ (reconciled to usage)
   user[3]               current_user        41   4.6%   0.00020   0.00002
   tool_result[2]        tool_result         37   4.1%   0.00018   0.00002
 
-  total $ (cold input): 0.00450
-  dead tools (shipped, never called): web_search, write_file — $0.00231 wasted every request
+  total $ (cold, uncached upper bound): 0.00450
+  tools not called in this capture: web_search, write_file ($0.00231 at the cold rate if they are never called)
 ```
 
 Half the input cost of that request is two tool definitions the model never used. You pay for them on every single call.
@@ -140,7 +140,7 @@ mcp-audit   model: claude-opus-4-8   window: 3 model calls
   [window: 3 model calls — a rarely used tool can look unused in a short window]
 ```
 
-`--defs` is a raw request (it carries the tool schemas, so the tokens are real);
+`--defs` is a raw request (it carries the tool schemas, so the per-tool token estimate is grounded in the real schema text);
 `--traces` are SDK or `claude -p --output-format stream-json` transcripts (they
 carry the call counts). It reports a call **rate over a stated window**, never a
 boolean "dead" — a tool used once a week looks unused in a short trace.
@@ -148,7 +148,7 @@ boolean "dead" — a tool used once a week looks unused in a short trace.
 ## What it does
 
 - **Per-component dollars.** Splits the request into `system`, one row **per named tool**, `history`, `tool_result`, and `current_user`, and prices each with the standard Claude rates. Existing tools count tokens; the cost is what you actually pay.
-- **Dead-tool detection.** Any tool defined in `tools[]` that never appears in an assistant `tool_use` block is flagged `[UNUSED]`, with the dollars it wastes on every request. This is the cheapest large saving in most agent setups.
+- **Dead-tool detection.** Any tool defined in `tools[]` that never appears in an assistant `tool_use` block is flagged `[UNUSED]`, with the dollars it wastes on every request. Removing an unused tool is often the single cheapest large saving in an agent setup.
 - **Cold vs cached.** Shows each component at the cold input rate and at the 0.1× prompt-cache read rate, so you can see what caching is (or isn't) buying you.
 - **Exact when it can be.** With a `usage` block present, the total and the dollars are exact; the per-component split is reconciled to that billed total. Without one, everything is a labelled estimate.
 
@@ -165,7 +165,7 @@ Owning the boundary is the point. Numbers are labelled by how much you can trust
 | Total input $ (capture has `usage`) | Exact — from the billed usage block |
 | Blended cache $ (usage has a cache split) | Exact — from the cache buckets |
 | Which tools are defined vs. actually called | Exact — structural |
-| Dead-tool token cost | Exact tokens per tool schema; rate is the list price |
+| Dead-tool token cost | Estimated tokens (~4 chars/token, reconciled to the billed total); list-price rate |
 | Per-component token split | Estimate — a stable ~4 chars/token heuristic, reconciled to the exact total |
 | Static-floor regression (`lock`) | Exact — the delta of the same estimator, so its bias cancels |
 | Per-request dynamic cost (history, RAG, tool results) | Not locked — it moves per call and isn't in your repo |

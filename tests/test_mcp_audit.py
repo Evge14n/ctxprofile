@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from ctxprofile.cli import main
-from ctxprofile.ingest_sdk import parse_trace_file
+from ctxprofile.ingest_sdk import iter_json_lines, parse_trace, parse_trace_file
 from ctxprofile.mcp_audit import audit
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -40,6 +40,17 @@ def test_called_server_has_calls() -> None:
     files = next(s for s in report.servers if s.server == "mcp__files")
     assert files.calls == 2
     assert files.uncalled_tools == []
+
+
+def test_trace_skips_malformed_lines() -> None:
+    text = (
+        '{"type": "system", "subtype": "init", "tools": ["a"]}\n'
+        "this is not json\n"
+        '{"type": "result", "total_cost_usd": 0.1}'
+    )
+    trace = parse_trace(iter_json_lines(text))
+    assert "a" in trace.tools_declared
+    assert trace.total_cost_usd == 0.1
 
 
 def test_cli_mcp_audit(capsys: pytest.CaptureFixture[str]) -> None:

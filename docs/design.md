@@ -52,7 +52,7 @@ This is the part that matters. A tool that overclaims here is worse than none.
 | Total input $ (with `usage`) | Exact |
 | Blended cache $ (with a cache split) | Exact |
 | Tools defined vs. called | Exact |
-| Dead-tool token cost | Exact tokens; list-price rate |
+| Dead-tool token cost | Estimated tokens (~4 chars/token); list-price rate |
 | Per-component token split | Estimate (reconciled to the exact total) |
 | Static-floor regression | Exact delta of a stable estimator |
 | Per-request dynamic cost (history, RAG, tool results) | Not locked — moves per call, not in the repo |
