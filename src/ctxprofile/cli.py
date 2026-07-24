@@ -6,8 +6,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from ctxprofile.compare import compare_payloads
 from ctxprofile.cost import analyze
-from ctxprofile.models import CostReport
+from ctxprofile.models import CostReport, ReportDiff
 
 
 def format_report(report: CostReport) -> str:
@@ -34,6 +35,45 @@ def format_report(report: CostReport) -> str:
     else:
         lines.append("  dead tools: none")
     return "\n".join(lines)
+
+
+def _pct(a: float, b: float) -> str:
+    if a == 0:
+        return "n/a"
+    return f"{(b - a) / a * 100:+.0f}%"
+
+
+def format_diff(diff: ReportDiff) -> str:
+    delta = diff.total_usd_cold_b - diff.total_usd_cold_a
+    lines = [
+        f"compare (A -> B)   model: {diff.model}",
+        (
+            f"  total $ (cold): {diff.total_usd_cold_a:.5f} -> {diff.total_usd_cold_b:.5f}"
+            f"   ({delta:+.5f}, {_pct(diff.total_usd_cold_a, diff.total_usd_cold_b)})"
+        ),
+        "",
+        f"  {'component':<22}{'Δ tokens':>10}{'Δ $ cold':>12}  note",
+    ]
+    for row in diff.rows:
+        if row.delta_tokens == 0 and abs(row.delta_usd_cold) < 1e-9:
+            continue
+        lines.append(
+            f"  {row.name[:21]:<22}{row.delta_tokens:>+10}{row.delta_usd_cold:>+12.5f}  {row.status}"
+        )
+    if diff.dead_tools_a != diff.dead_tools_b:
+        lines.append("")
+        lines.append(
+            f"  dead tools: {diff.dead_tools_a or 'none'} -> {diff.dead_tools_b or 'none'}"
+        )
+    return "\n".join(lines)
+
+
+def _cmd_compare(args: argparse.Namespace) -> int:
+    payload_a = json.loads(Path(args.before).read_text(encoding="utf-8"))
+    payload_b = json.loads(Path(args.after).read_text(encoding="utf-8"))
+    diff = compare_payloads(payload_a, payload_b, model_override=args.model)
+    print(format_diff(diff))
+    return 0
 
 
 def _cmd_analyze(args: argparse.Namespace) -> int:
@@ -77,6 +117,12 @@ def build_parser() -> argparse.ArgumentParser:
     an.add_argument("--model", help="override the model id")
     an.add_argument("--json", action="store_true", help="emit JSON instead of a table")
     an.set_defaults(func=_cmd_analyze)
+
+    cmp = sub.add_parser("compare", help="show the token/$ delta between two captured requests")
+    cmp.add_argument("before", help="path to the baseline capture JSON")
+    cmp.add_argument("after", help="path to the changed capture JSON")
+    cmp.add_argument("--model", help="override the model id")
+    cmp.set_defaults(func=_cmd_compare)
     return parser
 
 

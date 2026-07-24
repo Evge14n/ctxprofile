@@ -39,11 +39,24 @@ Capture one request/response pair as JSON (the raw Anthropic Messages API reques
 
 ```
 ctxprofile analyze capture.json
-ctxprofile analyze capture.json --json          # machine-readable
+ctxprofile analyze capture.json --json           # machine-readable
 ctxprofile analyze request-only.json --model claude-sonnet-5
+ctxprofile compare before.json after.json        # $ delta of a prompt/tool change
 ```
 
 The input is either a bare request, or `{ "request": {...}, "response": {...} }`.
+
+`compare` shows exactly what a change costs. Drop a dead tool and see it:
+
+```
+compare (A -> B)   model: claude-opus-4-8
+  total $ (cold): 0.00450 -> 0.00350   (-0.00100, -22%)
+
+  component               Δ tokens    Δ $ cold  note
+  web_search                  -224    -0.00112  removed
+  ...
+  dead tools: ['web_search', 'write_file'] -> ['write_file']
+```
 
 ## What it does
 
@@ -62,7 +75,7 @@ Context attribution is not a new idea. `context-lens` and `ContextSpy` are live 
 
 ## Roadmap
 
-- `compare A.json B.json` — paired token/$ deltas between two context configs.
+- A CI budget gate (`ctxprofile ci --budget`) that fails a build when per-request cost regresses or a dead tool appears.
 - Cache-churn cost: attribute a rebuilt cache prefix to the component that invalidated it (needs two sequential captures).
 - RAG-chunk attribution when retrieved context is tagged.
 - Optional exact per-component counts via the `count_tokens` endpoint.

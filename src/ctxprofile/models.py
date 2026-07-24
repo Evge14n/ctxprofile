@@ -37,3 +37,21 @@ class CostReport:
     dead_tools: list[str]
     wasted_usd_cold: float
     total_usd_cold: float
+
+
+@dataclass(frozen=True)
+class ComponentDelta:
+    name: str
+    delta_tokens: int
+    delta_usd_cold: float
+    status: str
+
+
+@dataclass(frozen=True)
+class ReportDiff:
+    model: str
+    total_usd_cold_a: float
+    total_usd_cold_b: float
+    rows: list[ComponentDelta]
+    dead_tools_a: list[str]
+    dead_tools_b: list[str]
