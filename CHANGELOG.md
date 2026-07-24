@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0
+
+- Optional MCP server (`pip install "ctxprofile[mcp]"`, run `ctxprofile-mcp`):
+  exposes `analyze_request` and `audit_mcp_servers` so a Claude agent can profile
+  its own context. The core CLI stays dependency-free; only this extra needs `mcp`.
+- Refactor: one report/audit serializer shared by the CLI and the MCP server.
+
 ## 0.8.0
 
 - `capture` reassembles streaming (SSE) responses into a normal message with
