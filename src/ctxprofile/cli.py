@@ -154,13 +154,27 @@ def _cmd_lock(args: argparse.Namespace) -> int:
     return 0
 
 
+def _ci_github(results: list[tuple[str, list[str]]], failures: int) -> str:
+    lines = ["### ctxprofile"]
+    if not failures:
+        lines.append(f"\n✅ all {len(results)} capture(s) within budget.")
+        return "\n".join(lines)
+    for path, violations in results:
+        if violations:
+            lines.append(f"\n**❌ `{path}`**")
+            lines += [f"- {v}" for v in violations]
+        else:
+            lines.append(f"\n✅ `{path}`")
+    return "\n".join(lines)
+
+
 def _cmd_ci(args: argparse.Namespace) -> int:
     if not args.budget and not args.lock:
         print("ci needs --budget and/or --lock")
         return 2
     budget = load_budget(args.budget) if args.budget else None
     lock = load_lock(args.lock) if args.lock else None
-    failures = 0
+    results: list[tuple[str, list[str]]] = []
     for path in args.captures:
         payload = json.loads(Path(path).read_text(encoding="utf-8"))
         request = payload.get("request", payload)
@@ -172,13 +186,18 @@ def _cmd_ci(args: argparse.Namespace) -> int:
             violations += diff_lock(
                 static_summary(request), lock, args.max_regression, not args.allow_new_tools
             )
-        if violations:
-            failures += 1
-            print(f"FAIL {path}")
-            for violation in violations:
-                print(f"  - {violation}")
-        else:
-            print(f"ok   {path}")
+        results.append((path, violations))
+    failures = sum(1 for _, violations in results if violations)
+    if args.format == "github":
+        print(_ci_github(results, failures))
+    else:
+        for path, violations in results:
+            if violations:
+                print(f"FAIL {path}")
+                for violation in violations:
+                    print(f"  - {violation}")
+            else:
+                print(f"ok   {path}")
     return 1 if failures else 0
 
 
@@ -252,6 +271,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ci.add_argument(
         "--allow-new-tools", action="store_true", help="do not fail when a new tool appears"
+    )
+    ci.add_argument(
+        "--format", choices=["text", "github"], default="text", help="output format"
     )
     ci.set_defaults(func=_cmd_ci)
 

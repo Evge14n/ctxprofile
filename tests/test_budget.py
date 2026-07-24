@@ -38,3 +38,11 @@ def test_cli_ci_fails_on_breach() -> None:
 
 def test_cli_ci_passes_within_budget() -> None:
     assert main(["ci", "--budget", str(BUDGET), str(FIXTURES / "capture_b.json")]) == 0
+
+
+def test_cli_ci_github_format(capsys) -> None:
+    rc = main(["ci", "--budget", str(BUDGET), "--format", "github", str(FIXTURES / "capture.json")])
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "### ctxprofile" in out
+    assert "❌" in out
