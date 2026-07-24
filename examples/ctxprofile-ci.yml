@@ -1,0 +1,16 @@
+# Copy this into .github/workflows/ of your agent repo to gate context cost on
+# every PR. Commit a .ctxprofile.lock (ctxprofile lock --from a capture) and a
+# ctxbudget.toml next to it, plus a few captured requests under captures/.
+name: ctxprofile
+on: [pull_request]
+
+jobs:
+  context-budget:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ctxprofile
+      - run: ctxprofile ci --budget ctxbudget.toml --lock .ctxprofile.lock captures/*.json

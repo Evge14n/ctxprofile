@@ -153,6 +153,21 @@ boolean "dead" — a tool used once a week looks unused in a short trace.
 
 Tokens per component come from a stable offline heuristic (~4 chars/token). That estimate is only used for the **proportional** split; when the capture includes a real `usage` block, `ctxprofile` scales the split so the components sum to the exact billed input and prices the exact total. So the headline dollars are real; the per-component division is a grounded estimate, marked as such.
 
+## What it can and can't tell you
+
+Owning the boundary is the point. Numbers are labelled by how much you can trust them.
+
+| Signal | Confidence |
+| --- | --- |
+| Total input $ (capture has `usage`) | Exact — from the billed usage block |
+| Blended cache $ (usage has a cache split) | Exact — from the cache buckets |
+| Which tools are defined vs. actually called | Exact — structural |
+| Dead-tool token cost | Exact tokens per tool schema; rate is the list price |
+| Per-component token split | Estimate — a stable ~4 chars/token heuristic, reconciled to the exact total |
+| Static-floor regression (`lock`) | Exact — the delta of the same estimator, so its bias cancels |
+| Per-request dynamic cost (history, RAG, tool results) | Not locked — it moves per call and isn't in your repo |
+| Cache-churn attribution | Not built — needs sequential, timestamped captures ([roadmap](#roadmap)) |
+
 ## Prior art
 
 Context attribution is not a new idea. `context-lens` and `ContextSpy` are live proxies with dashboards that break a request into components; `context-profiler` is an offline CLI for token distribution. `ctxprofile` is deliberately narrow and complementary: it is offline (no proxy to run), it reports **dollars** rather than only tokens, it splits **per individual tool** rather than one "tool definitions" blob, and it names **dead tools**. Use a proxy dashboard for a live feed; use `ctxprofile` in a script or CI to cost and lint a single captured request.

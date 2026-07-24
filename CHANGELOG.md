@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+- `compare --monthly-requests`: project a per-request $ delta to a monthly volume
+  (the number that stops a scroll), and flag when the delta includes per-request
+  dynamic movement rather than just your static change.
+- Docs: a "What it can and can't tell you" confidence table, an example CI
+  workflow (`examples/ctxprofile-ci.yml`), and CONTRIBUTING.
+
 ## 0.5.0
 
 - `capture` command: a stdlib forward-proxy. Point a Claude client at it with
