@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ctxprofile"
-version = "0.5.0"
+version = "0.6.0"
 description = "Offline CLI that costs an LLM request per context component, and flags tool definitions you ship but never call."
 readme = "README.md"
 requires-python = ">=3.11"
