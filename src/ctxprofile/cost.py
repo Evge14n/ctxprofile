@@ -51,18 +51,21 @@ def build_report(
     est_total = sum(tokens)
 
     billed = _billed_input(usage)
-    # Total and dollars are exact when a usage block is present; the per-component
-    # split stays a proportional estimate. When absent, everything is estimated.
-    scale = billed / est_total if billed and est_total else 1.0
     reconciled = billed is not None
 
-    scaled = [round(t * scale) for t in tokens]
-    # When reconciled, the billed total is exact; push the rounding remainder onto
-    # the largest component so the per-component tokens sum to the billed total.
-    if reconciled and billed and scaled:
-        remainder = billed - sum(scaled)
-        biggest = max(range(len(scaled)), key=lambda i: scaled[i])
-        scaled[biggest] = max(0, scaled[biggest] + remainder)
+    # When reconciled, the billed total is exact; apportion it across components by
+    # estimate weight with the largest-remainder (Hamilton) method, which keeps
+    # every part non-negative and makes the parts sum to the billed total exactly.
+    if reconciled and billed and est_total > 0:
+        exact = [t * billed / est_total for t in tokens]
+        scaled = [int(x) for x in exact]
+        shortfall = billed - sum(scaled)
+        for i in sorted(range(len(tokens)), key=lambda i: exact[i] - scaled[i], reverse=True)[
+            :shortfall
+        ]:
+            scaled[i] += 1
+    else:
+        scaled = list(tokens)
     grand = sum(scaled) or 1
 
     eff_rate, cached = _effective_rate(usage, model)

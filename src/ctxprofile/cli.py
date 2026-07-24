@@ -37,11 +37,11 @@ def format_report(report: CostReport) -> str:
     if report.dead_tools:
         names = ", ".join(report.dead_tools)
         lines.append(
-            f"  dead tools (shipped, never called): {names} "
-            f"— ${report.wasted_usd_cold:.5f} wasted every request"
+            f"  tools not called in this capture: {names} "
+            f"(${report.wasted_usd_cold:.5f} at the cold rate if they are never called)"
         )
     else:
-        lines.append("  dead tools: none")
+        lines.append("  tools not called in this capture: none")
     return "\n".join(lines)
 
 

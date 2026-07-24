@@ -38,6 +38,13 @@ def test_write_capture_uses_message_id(tmp_path: Path) -> None:
     assert "msg_abc" in path.name
 
 
+def test_write_capture_sanitizes_malicious_id(tmp_path: Path) -> None:
+    record = build_record("/v1/messages", b"{}", b'{"id": "../../../../evil"}', "2026-07-24T00:00:00")
+    path = write_capture(tmp_path, record)
+    assert tmp_path.resolve() in path.resolve().parents
+    assert ".." not in path.name
+
+
 class _MockUpstream(BaseHTTPRequestHandler):
     def log_message(self, *_: Any) -> None:
         return

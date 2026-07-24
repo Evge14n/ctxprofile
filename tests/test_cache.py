@@ -21,11 +21,6 @@ def test_billed_input_usd_blends_buckets() -> None:
     assert pricing.billed_input_usd("claude-opus-4-8", 100, cache_read=800) == pytest.approx(0.0009)
 
 
-def test_min_cache_tokens_has_a_default() -> None:
-    assert pricing.min_cache_tokens("claude-opus-4-8") == 1024
-    assert pricing.min_cache_tokens("unknown-model") == 1024
-
-
 def test_effective_below_cold_when_cached() -> None:
     report = analyze(_load("capture_cached.json"))
     assert report.cached

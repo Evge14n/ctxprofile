@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 from datetime import UTC, datetime
 from http.client import HTTPConnection, HTTPSConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -8,7 +10,8 @@ from pathlib import Path
 from typing import Any
 
 # Only request/response bodies are stored, never headers, so the API key never
-# lands on disk.
+# lands on disk. Captures still hold plaintext prompts and model output — treat
+# the capture directory as secret.
 _HOP_BY_HOP = {"host", "content-length", "connection", "transfer-encoding", "accept-encoding"}
 
 
@@ -42,14 +45,23 @@ def _capture_name(record: dict[str, Any], captured_at: str) -> str:
     stamp = captured_at.replace(":", "").replace("-", "").replace(".", "")
     response = record.get("response") or {}
     msg_id = response.get("id") if isinstance(response, dict) else None
-    return f"{stamp}-{msg_id or 'req'}.json"
+    # The id comes from the upstream response body, so strip it to a safe token
+    # before it goes anywhere near a filename.
+    safe = re.sub(r"[^A-Za-z0-9_-]", "", str(msg_id or ""))[:64] or "req"
+    return f"{stamp}-{safe}.json"
 
 
 def write_capture(out_dir: str | Path, record: dict[str, Any]) -> Path:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     path = out / _capture_name(record, str(record.get("captured_at", "")))
+    if out.resolve() not in path.resolve().parents:
+        raise ValueError("refusing to write a capture outside the output directory")
     path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
     return path
 
 
@@ -61,7 +73,12 @@ def _make_handler(
             return
 
         def do_POST(self) -> None:
-            length = int(self.headers.get("Content-Length", 0))
+            self.close_connection = True
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+            except ValueError:
+                self.send_error(400, "invalid Content-Length")
+                return
             request_bytes = self.rfile.read(length)
             headers = {
                 key: value

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.7.1
+
+- Fix (correctness): reconciliation now apportions the billed total with the
+  largest-remainder method, so the per-component split always sums to the exact
+  total. Previously a large negative rounding remainder could silently drop
+  tokens on a report flagged exact.
+- Fix: a malformed line in a trace file no longer aborts `mcp-audit`; unparseable
+  lines are skipped.
+- Security: sanitize the upstream response id before it reaches a capture
+  filename (path traversal), confirm the path stays inside the output directory,
+  write captures with `0o600`, and reject a non-integer `Content-Length`.
+- Docs: the confidence tables and demo output now say dead-tool token cost is an
+  estimate, not exact, and the single-request view says "not called in this
+  capture" rather than a permanent "dead" verdict.
+- Remove unused pricing dead code.
+
 ## 0.7.0
 
 - `ci --format github`: emit a markdown summary for posting as a PR comment.

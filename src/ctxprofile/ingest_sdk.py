@@ -28,10 +28,14 @@ class Trace:
 def iter_json_lines(text: str) -> Iterator[dict[str, Any]]:
     for line in text.splitlines():
         stripped = line.strip()
-        if stripped:
+        if not stripped:
+            continue
+        try:
             obj = json.loads(stripped)
-            if isinstance(obj, dict):
-                yield obj
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict):
+            yield obj
 
 
 def parse_trace(lines: Iterable[dict[str, Any]]) -> Trace:

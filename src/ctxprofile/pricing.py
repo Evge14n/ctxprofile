@@ -14,14 +14,6 @@ CACHE_WRITE_5M = 1.25
 CACHE_WRITE_1H = 2.0
 CACHE_READ = 0.1
 
-# Minimum prompt-cacheable prefix length (tokens). A prefix shorter than this
-# never caches, so a small static floor below it is not a caching regression.
-MODEL_MIN_CACHE_TOKENS: dict[str, int] = {
-    "claude-opus-4-8": 1024,
-    "claude-sonnet-5": 1024,
-    "claude-haiku-4-5": 2048,
-}
-
 _MODES = {"input", "output", "cache_write_5m", "cache_write_1h", "cache_read"}
 
 
@@ -67,7 +59,3 @@ def billed_input_usd(
         + usd(cache_write_1h, model, "cache_write_1h")
         + usd(cache_read, model, "cache_read")
     )
-
-
-def min_cache_tokens(model: str) -> int:
-    return MODEL_MIN_CACHE_TOKENS.get(model, 1024)

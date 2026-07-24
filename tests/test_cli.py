@@ -14,7 +14,7 @@ def test_cli_table(capsys: pytest.CaptureFixture[str]) -> None:
     rc = main(["analyze", str(FIXTURE)])
     assert rc == 0
     out = capsys.readouterr().out
-    assert "dead tools" in out
+    assert "not called in this capture" in out
     assert "web_search" in out
     assert "claude-opus-4-8" in out
 
