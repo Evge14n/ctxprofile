@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ctxprofile.budget import check, load_budget
+from ctxprofile.capture import serve
 from ctxprofile.compare import compare_payloads
 from ctxprofile.cost import analyze
 from ctxprofile.ingest_sdk import parse_trace_file
@@ -107,6 +108,20 @@ def format_audit(report: AuditReport, min_calls: int = 1) -> str:
             f"unused in a short window]"
         )
     return "\n".join(lines)
+
+
+def _cmd_capture(args: argparse.Namespace) -> int:
+    server = serve(args.port, args.out, args.upstream_host, args.upstream_port, not args.no_tls)
+    print(f"ctxprofile capture on http://127.0.0.1:{args.port} -> {args.upstream_host}")
+    print(f"  point your client at it:  ANTHROPIC_BASE_URL=http://127.0.0.1:{args.port}")
+    print(f"  captures -> {args.out}   (streaming responses are stored raw)")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.shutdown()
+    return 0
 
 
 def _cmd_mcp_audit(args: argparse.Namespace) -> int:
@@ -243,6 +258,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ma.add_argument("--model", help="override the model id")
     ma.set_defaults(func=_cmd_mcp_audit)
+
+    cap = sub.add_parser("capture", help="forward-proxy that tees /v1/messages to capture files")
+    cap.add_argument("--port", type=int, default=8787)
+    cap.add_argument("--out", default="captures", help="directory for capture files")
+    cap.add_argument("--upstream-host", default="api.anthropic.com", dest="upstream_host")
+    cap.add_argument("--upstream-port", type=int, default=443, dest="upstream_port")
+    cap.add_argument(
+        "--no-tls", action="store_true", dest="no_tls", help="plain HTTP upstream (for testing)"
+    )
+    cap.set_defaults(func=_cmd_capture)
     return parser
 
 
