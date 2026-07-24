@@ -16,7 +16,7 @@ LOCK_VERSION = 1
 ESTIMATOR = "chars4-v1"
 
 
-def _server_prefix(tool: str) -> str | None:
+def server_prefix(tool: str) -> str | None:
     if not tool.startswith("mcp__"):
         return None
     parts = tool.split("__")
@@ -33,7 +33,7 @@ def static_summary(request: dict[str, Any]) -> dict[str, Any]:
             component_tokens["system"] = estimate_tokens(component.text)
         elif component.kind == KIND_TOOL_DEF:
             component_tokens[f"tool:{component.name}"] = estimate_tokens(component.text)
-    servers = sorted({p for p in (_server_prefix(t) for t in defined) if p is not None})
+    servers = sorted({p for p in (server_prefix(t) for t in defined) if p is not None})
     return {
         "static_input_tokens": sum(component_tokens.values()),
         "components": component_tokens,

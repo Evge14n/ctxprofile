@@ -100,6 +100,33 @@ not lock per-request cost (RAG chunks, history, tool results); that is not in th
 repo and moves on every call. The gate fires on the delta of a stable estimator,
 so the estimator's bias cancels.
 
+## Audit MCP-server tool bloat across a corpus
+
+Single-request dead-tool detection is noisy — one request calls a couple of
+tools and everything else looks idle. The signal is a **corpus**: point
+`mcp-audit` at your tool definitions plus a set of `claude -p` / Agent SDK JSONL
+traces, and it groups the wasted tokens by MCP server.
+
+```
+ctxprofile mcp-audit --defs request.json --traces runs/*.jsonl
+```
+
+```
+mcp-audit   model: claude-opus-4-8   window: 3 model calls
+  server                     tools  tok/req  calls  $/req cold
+  mcp__ruflo                     2      130      0     0.00065
+  mcp__files                     1       49      2     0.00024
+  (local)                        1       40      1     0.00020
+
+  mcp__ruflo: 130 tok/req, 0 calls in 3 model calls — $0.00065 shipped every request
+  [window: 3 model calls — a rarely used tool can look unused in a short window]
+```
+
+`--defs` is a raw request (it carries the tool schemas, so the tokens are real);
+`--traces` are SDK or `claude -p --output-format stream-json` transcripts (they
+carry the call counts). It reports a call **rate over a stated window**, never a
+boolean "dead" — a tool used once a week looks unused in a short trace.
+
 ## What it does
 
 - **Per-component dollars.** Splits the request into `system`, one row **per named tool**, `history`, `tool_result`, and `current_user`, and prices each with the standard Claude rates. Existing tools count tokens; the cost is what you actually pay.
