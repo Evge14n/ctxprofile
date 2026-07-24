@@ -45,9 +45,13 @@ class CostReport:
 @dataclass(frozen=True)
 class ComponentDelta:
     name: str
+    kind: str
     delta_tokens: int
     delta_usd_cold: float
     status: str
+
+
+STATIC_KINDS = frozenset({KIND_SYSTEM, KIND_TOOL_DEF})
 
 
 @dataclass(frozen=True)
