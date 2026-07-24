@@ -22,6 +22,54 @@ def _safe_json(raw: bytes) -> Any:
         return None
 
 
+def reassemble_sse(text: str) -> dict[str, Any] | None:
+    """Rebuild a Message from an Anthropic streaming (SSE) response so its usage
+    and content are usable. The input-side usage comes from message_start and the
+    final output_tokens from message_delta; text and tool_use blocks are rejoined
+    from their deltas. Returns None if the text is not a recognizable stream."""
+    message: dict[str, Any] | None = None
+    blocks: dict[int, dict[str, Any]] = {}
+    partial: dict[int, str] = {}
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("data:"):
+            continue
+        try:
+            event = json.loads(stripped[5:].strip())
+        except json.JSONDecodeError:
+            continue
+        etype = event.get("type")
+        if etype == "message_start":
+            message = dict(event.get("message") or {})
+        elif etype == "content_block_start":
+            blocks[int(event.get("index", 0))] = dict(event.get("content_block") or {})
+        elif etype == "content_block_delta":
+            index = int(event.get("index", 0))
+            delta = event.get("delta") or {}
+            if delta.get("type") == "text_delta":
+                block = blocks.setdefault(index, {"type": "text", "text": ""})
+                block["text"] = block.get("text", "") + delta.get("text", "")
+            elif delta.get("type") == "input_json_delta":
+                partial[index] = partial.get(index, "") + delta.get("partial_json", "")
+        elif etype == "message_delta" and message is not None:
+            message.setdefault("usage", {}).update(event.get("usage") or {})
+            if "stop_reason" in (event.get("delta") or {}):
+                message["stop_reason"] = event["delta"]["stop_reason"]
+
+    if message is None:
+        return None
+    for index, raw in partial.items():
+        if blocks.get(index, {}).get("type") == "tool_use":
+            try:
+                blocks[index]["input"] = json.loads(raw) if raw else {}
+            except json.JSONDecodeError:
+                blocks[index]["input"] = {}
+    if blocks:
+        message["content"] = [blocks[i] for i in sorted(blocks)]
+    return message
+
+
 def build_record(
     path: str, request_bytes: bytes, response_bytes: bytes, captured_at: str
 ) -> dict[str, Any]:
@@ -35,9 +83,14 @@ def build_record(
     }
     if response is not None:
         record["response"] = response
+        return record
+    text = response_bytes.decode("utf-8", "replace")
+    reassembled = reassemble_sse(text)
+    if reassembled is not None:
+        record["response"] = reassembled
+        record["response_reassembled"] = True
     else:
-        # Streaming (SSE) or non-JSON: keep the raw text; message reassembly is deferred.
-        record["response_raw"] = response_bytes.decode("utf-8", "replace")
+        record["response_raw"] = text
     return record
 
 
