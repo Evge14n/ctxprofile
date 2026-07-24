@@ -315,7 +315,12 @@ def main(argv: list[str] | None = None) -> int:
         except (ValueError, OSError):
             pass
     args = build_parser().parse_args(argv)
-    return int(args.func(args))
+    try:
+        return int(args.func(args))
+    except (FileNotFoundError, KeyError, ValueError, TypeError, json.JSONDecodeError) as error:
+        message = error.args[0] if error.args else error
+        print(f"error: {message}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

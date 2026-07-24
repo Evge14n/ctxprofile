@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0
+
+- `ci --format github`: emit a markdown summary for posting as a PR comment.
+- Clean CLI errors: unknown model, missing file, or malformed JSON now print a
+  one-line `error: ...` and exit 2 instead of a traceback.
+- `docs/design.md`: the reasoning and the exact/estimate/not-knowable boundary.
+
 ## 0.6.0
 
 - `compare --monthly-requests`: project a per-request $ delta to a monthly volume
