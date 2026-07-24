@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ctxprofile"
+version = "0.1.0"
+description = "Offline CLI that costs an LLM request per context component, and flags tool definitions you ship but never call."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Olga Martynyuk" }]
+keywords = ["llm", "anthropic", "claude", "tokens", "cost", "context", "agents", "mcp"]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.10"]
+
+[project.scripts]
+ctxprofile = "ctxprofile.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ctxprofile"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src/ctxprofile"]
