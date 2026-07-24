@@ -12,5 +12,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install ctxprofile
+      - run: pip install git+https://github.com/Evge14n/ctxprofile
       - run: ctxprofile ci --budget ctxbudget.toml --lock .ctxprofile.lock captures/*.json

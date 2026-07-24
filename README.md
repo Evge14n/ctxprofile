@@ -28,10 +28,11 @@ Half the input cost of that request is two tool definitions the model never used
 ## Install
 
 ```
-pip install ctxprofile
+pip install git+https://github.com/Evge14n/ctxprofile
 ```
 
-Python 3.11+. Zero runtime dependencies.
+Python 3.11+, zero runtime dependencies. A PyPI release is pending; after it,
+`pip install ctxprofile` will work directly.
 
 ## Capture real requests
 
@@ -108,6 +109,8 @@ Drop either into GitHub Actions; it exits `1` on any breach, so the step blocks 
 ```yaml
 - run: ctxprofile ci --budget ctxbudget.toml --lock .ctxprofile.lock captures/*.json
 ```
+
+Add `--format github` to print a markdown summary you can post as a PR comment.
 
 Honest scope: the lock covers the **static floor** — the system prompt, the tool
 definitions, and the set of tools you ship — which lives in your repo. It does
