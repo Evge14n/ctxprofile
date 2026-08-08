@@ -7,13 +7,20 @@ from ctxprofile.ingest_sdk import iter_json_lines, parse_trace
 from ctxprofile.mcp_audit import audit
 from ctxprofile.serialize import audit_to_dict, report_to_dict
 
-# The SDK renamed its server class in 2.0; both expose .tool() and .run().
-try:
-    from mcp.server.mcpserver import MCPServer as _Server
-except ImportError:  # mcp < 2.0
-    from mcp.server.fastmcp import FastMCP as _Server
 
-mcp = _Server("ctxprofile")
+def _server_class() -> Any:
+    """The SDK renamed its server class in 2.0; both expose .tool() and .run()."""
+    try:
+        from mcp.server.mcpserver import MCPServer
+
+        return MCPServer
+    except ImportError:  # mcp < 2.0
+        from mcp.server.fastmcp import FastMCP
+
+        return FastMCP
+
+
+mcp = _server_class()("ctxprofile")
 
 
 @mcp.tool()
