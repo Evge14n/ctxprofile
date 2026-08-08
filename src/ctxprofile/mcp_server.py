@@ -2,14 +2,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
-
 from ctxprofile.cost import analyze
 from ctxprofile.ingest_sdk import iter_json_lines, parse_trace
 from ctxprofile.mcp_audit import audit
 from ctxprofile.serialize import audit_to_dict, report_to_dict
 
-mcp = FastMCP("ctxprofile")
+# The SDK renamed its server class in 2.0; both expose .tool() and .run().
+try:
+    from mcp.server.mcpserver import MCPServer as _Server
+except ImportError:  # mcp < 2.0
+    from mcp.server.fastmcp import FastMCP as _Server
+
+mcp = _Server("ctxprofile")
 
 
 @mcp.tool()

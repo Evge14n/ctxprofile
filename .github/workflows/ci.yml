@@ -21,3 +21,17 @@ jobs:
       - run: ruff check .
       - run: mypy
       - run: pytest -q
+
+  # The MCP SDK renamed its server class in 2.0; keep both paths working.
+  mcp-compat:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        mcp-version: ["1.28.1", "2.0.0"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]" "mcp==${{ matrix.mcp-version }}"
+      - run: pytest -q tests/test_mcp_server.py
