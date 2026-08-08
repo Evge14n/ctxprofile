@@ -28,8 +28,9 @@ Half the input cost of that request is two tool definitions the model never used
 **On real servers it gets worse.** Install four popular MCP servers — filesystem,
 memory, sequential-thinking, playwright — and before you type anything your
 request already carries **46 tool definitions, ~8,300 tokens, about $0.04 per
-call**. Tool schemas were 99.8% of that request's input, and one single tool
-(`sequentialthinking`) cost more than the entire filesystem server's twelve.
+call**. Tool schemas were 99.8% of that request's input, and a single tool
+(`sequentialthinking`) was the most expensive definition of all 46 — 6.6× the
+average filesystem tool.
 Measured, reproducible, and written up in
 **[docs/case-study-mcp.md](docs/case-study-mcp.md)**.
 
