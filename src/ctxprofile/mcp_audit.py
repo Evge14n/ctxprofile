@@ -10,6 +10,7 @@ from ctxprofile.ingest import parse_request
 from ctxprofile.ingest_sdk import Trace
 from ctxprofile.lockfile import server_prefix
 from ctxprofile.models import KIND_TOOL_DEF
+from ctxprofile.online import TokenCounter, measure
 from ctxprofile.tokenizer import estimate_tokens
 
 LOCAL = "(local)"
@@ -30,6 +31,7 @@ class AuditReport:
     model: str
     window_api_calls: int
     servers: list[ServerAudit]
+    measured_calls: int = 0
 
 
 def _group(tool: str) -> str:
@@ -37,13 +39,24 @@ def _group(tool: str) -> str:
 
 
 def audit(
-    defs_request: dict[str, Any], traces: Iterable[Trace], model_override: str | None = None
+    defs_request: dict[str, Any],
+    traces: Iterable[Trace],
+    model_override: str | None = None,
+    counter: TokenCounter | None = None,
+    max_calls: int | None = None,
 ) -> AuditReport:
     """Join tool schema tokens (from a raw request) with call counts (from a trace
     corpus), grouped by MCP server, so shipped-but-unused tools surface by server."""
     components, defined, _ = parse_request(defs_request)
     model = model_override or defs_request.get("model") or "claude-opus-4-8"
     tool_tokens = {c.name: estimate_tokens(c.text) for c in components if c.kind == KIND_TOOL_DEF}
+
+    measured_calls = 0
+    if counter:
+        # Only the tool schemas matter here, so don't spend a call on the system prompt.
+        split = measure({"tools": defs_request.get("tools")}, model, counter, max_calls=max_calls)
+        tool_tokens.update(split.tools)
+        measured_calls = split.calls
 
     calls: Counter[str] = Counter()
     window = 0
@@ -73,4 +86,6 @@ def audit(
 
     # Fully unused servers first, then by token weight, so the worst waste is on top.
     servers.sort(key=lambda s: (s.calls > 0, -s.tokens_per_request))
-    return AuditReport(model=model, window_api_calls=window, servers=servers)
+    return AuditReport(
+        model=model, window_api_calls=window, servers=servers, measured_calls=measured_calls
+    )

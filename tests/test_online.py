@@ -9,6 +9,7 @@ import pytest
 from ctxprofile.cli import format_report, main
 from ctxprofile.cost import analyze, build_report
 from ctxprofile.ingest import parse_request
+from ctxprofile.mcp_audit import audit
 from ctxprofile.models import (
     KIND_CURRENT_USER,
     KIND_HISTORY,
@@ -169,6 +170,22 @@ def test_analyze_end_to_end_marks_the_measured_rows():
     assert report.measured_calls == api.calls
     # Same split the ingest layer produces, so no component is invented or dropped.
     assert len(report.components) == len(parse_request(request)[0])
+
+
+def test_mcp_audit_uses_measured_tool_tokens_and_skips_the_system_call():
+    costs = {"mcp__files__read": 400, "mcp__files__write": 600, "local_tool": 100}
+    api = FakeAPI(system_cost=999, tool_costs=costs)
+    report = audit(_request(list(costs)), [], counter=api)
+
+    by_server = {s.server: s for s in report.servers}
+    files = by_server["mcp__files"]
+    # Measured, not the ~4 chars/token estimate of a two-key schema stub.
+    assert files.tokens_per_request > 900
+    assert files.tokens_per_request + by_server["(local)"].tokens_per_request == 7 + sum(
+        costs.values()
+    )
+    # floor + all-tools + one leave-one-out per tool; the system prompt is not measured.
+    assert report.measured_calls == 2 + len(costs) == api.calls
 
 
 class StubMessages:

@@ -106,8 +106,13 @@ def _cmd_compare(args: argparse.Namespace) -> int:
 
 
 def format_audit(report: AuditReport, min_calls: int = 1) -> str:
+    basis = (
+        f"   tokens: measured ({report.measured_calls} count_tokens calls)"
+        if report.measured_calls
+        else ""
+    )
     lines = [
-        f"mcp-audit   model: {report.model}   window: {report.window_api_calls} model calls",
+        f"mcp-audit   model: {report.model}   window: {report.window_api_calls} model calls{basis}",
         "",
         f"  {'server':<26}{'tools':>6}{'tok/req':>9}{'calls':>7}{'$/req cold':>12}",
     ]
@@ -150,7 +155,13 @@ def _cmd_mcp_audit(args: argparse.Namespace) -> int:
     defs = json.loads(Path(args.defs).read_text(encoding="utf-8"))
     request = defs.get("request", defs)
     traces = [parse_trace_file(path) for path in args.traces]
-    report = audit(request, traces, model_override=args.model)
+    report = audit(
+        request,
+        traces,
+        model_override=args.model,
+        counter=default_counter() if args.online else None,
+        max_calls=args.online_max_calls,
+    )
     print(format_audit(report, min_calls=args.min_calls))
     return 0
 
@@ -230,6 +241,22 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_online_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--online",
+        action="store_true",
+        help="measure tokens with count_tokens instead of estimating them "
+        '(needs an API key and pip install "ctxprofile[online]")',
+    )
+    parser.add_argument(
+        "--online-max-calls",
+        type=int,
+        default=64,
+        dest="online_max_calls",
+        help="refuse to run --online if it would need more count_tokens calls than this",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ctxprofile")
     parser.add_argument("--version", action="version", version=f"ctxprofile {__version__}")
@@ -238,19 +265,7 @@ def build_parser() -> argparse.ArgumentParser:
     an.add_argument("payload", help="path to a captured request JSON (or {request, response})")
     an.add_argument("--model", help="override the model id")
     an.add_argument("--json", action="store_true", help="emit JSON instead of a table")
-    an.add_argument(
-        "--online",
-        action="store_true",
-        help="measure system and per-tool tokens with count_tokens instead of estimating "
-        '(needs an API key and pip install "ctxprofile[online]")',
-    )
-    an.add_argument(
-        "--online-max-calls",
-        type=int,
-        default=64,
-        dest="online_max_calls",
-        help="refuse to run --online if it would need more count_tokens calls than this",
-    )
+    _add_online_args(an)
     an.set_defaults(func=_cmd_analyze)
 
     cmp = sub.add_parser("compare", help="show the token/$ delta between two captured requests")
@@ -301,6 +316,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="a server with fewer calls than this is flagged as unused",
     )
     ma.add_argument("--model", help="override the model id")
+    _add_online_args(ma)
     ma.set_defaults(func=_cmd_mcp_audit)
 
     cap = sub.add_parser("capture", help="forward-proxy that tees /v1/messages to capture files")
