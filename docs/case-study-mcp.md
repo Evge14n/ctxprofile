@@ -55,10 +55,10 @@ Two things stand out.
 the session never touches a browser — and most coding sessions don't — that is
 pure overhead, on every call, forever.
 
-**One tool costs 1,021 tokens.** `sequentialthinking` ships a single tool whose
-schema is larger than the entire filesystem server's twelve. A single tool can
-quietly be your most expensive one; you would never guess that from the server
-count.
+**One tool costs 1,021 tokens.** `sequentialthinking` exposes a single tool, and
+its schema is the most expensive definition in the whole set — 6.6× the average
+filesystem tool, and 55% of that entire twelve-tool server on its own. Tool count
+tells you nothing about cost.
 
 In the trace above only the filesystem server was ever called. The other three —
 6,424 tokens, $0.032 per request — were shipped and ignored.
