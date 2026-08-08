@@ -11,6 +11,7 @@ def report_to_dict(report: CostReport) -> dict[str, Any]:
         "model": report.model,
         "total_tokens": report.total_tokens,
         "reconciled": report.reconciled,
+        "usage_seen": report.usage_seen,
         "cached": report.cached,
         "total_usd_cold": report.total_usd_cold,
         "total_usd_effective": report.total_usd_effective,

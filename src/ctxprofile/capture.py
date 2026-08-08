@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from datetime import UTC, datetime
 from http.client import HTTPConnection, HTTPSConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -39,23 +40,39 @@ def reassemble_sse(text: str) -> dict[str, Any] | None:
             event = json.loads(stripped[5:].strip())
         except json.JSONDecodeError:
             continue
+        if not isinstance(event, dict):
+            continue
+        # Fields are read defensively: this text is whatever the upstream sent, and a
+        # surprise here must not cost the caller a response they already paid for.
         etype = event.get("type")
+        index = event.get("index", 0)
+        if etype in ("content_block_start", "content_block_delta") and not isinstance(index, int):
+            continue
         if etype == "message_start":
-            message = dict(event.get("message") or {})
+            if isinstance(event.get("message"), dict):
+                message = dict(event["message"])
         elif etype == "content_block_start":
-            blocks[int(event.get("index", 0))] = dict(event.get("content_block") or {})
+            start = event.get("content_block")
+            blocks[index] = dict(start) if isinstance(start, dict) else {}
         elif etype == "content_block_delta":
-            index = int(event.get("index", 0))
-            delta = event.get("delta") or {}
-            if delta.get("type") == "text_delta":
+            delta = event.get("delta")
+            if not isinstance(delta, dict):
+                continue
+            if delta.get("type") == "text_delta" and isinstance(delta.get("text"), str):
                 block = blocks.setdefault(index, {"type": "text", "text": ""})
-                block["text"] = block.get("text", "") + delta.get("text", "")
-            elif delta.get("type") == "input_json_delta":
-                partial[index] = partial.get(index, "") + delta.get("partial_json", "")
+                block["text"] = str(block.get("text", "")) + delta["text"]
+            elif delta.get("type") == "input_json_delta" and isinstance(
+                delta.get("partial_json"), str
+            ):
+                partial[index] = partial.get(index, "") + delta["partial_json"]
         elif etype == "message_delta" and message is not None:
-            message.setdefault("usage", {}).update(event.get("usage") or {})
-            if "stop_reason" in (event.get("delta") or {}):
-                message["stop_reason"] = event["delta"]["stop_reason"]
+            usage = event.get("usage")
+            if isinstance(usage, dict):
+                current = message.get("usage")
+                message["usage"] = {**current, **usage} if isinstance(current, dict) else dict(usage)
+            delta = event.get("delta")
+            if isinstance(delta, dict) and "stop_reason" in delta:
+                message["stop_reason"] = delta["stop_reason"]
 
     if message is None:
         return None
@@ -140,22 +157,41 @@ def _make_handler(
             }
             conn_cls = HTTPSConnection if use_tls else HTTPConnection
             conn = conn_cls(upstream_host, upstream_port, timeout=600)
-            conn.request("POST", self.path, body=request_bytes, headers=headers)
-            upstream = conn.getresponse()
-            response_bytes = upstream.read()
+            try:
+                conn.request("POST", self.path, body=request_bytes, headers=headers)
+                upstream = conn.getresponse()
+                response_bytes = upstream.read()
+                status = upstream.status
+                out_headers = [
+                    (key, value)
+                    for key, value in upstream.getheaders()
+                    if key.lower() not in _HOP_BY_HOP
+                ]
+            except OSError as error:
+                self.send_error(502, f"upstream request failed: {error}")
+                return
+            finally:
+                conn.close()
 
             if self.path.rstrip("/").endswith("/v1/messages"):
                 captured_at = datetime.now(UTC).isoformat()
-                write_capture(out_dir, build_record(self.path, request_bytes, response_bytes, captured_at))
+                try:
+                    write_capture(
+                        out_dir,
+                        build_record(self.path, request_bytes, response_bytes, captured_at),
+                    )
+                except Exception as error:  # noqa: BLE001 - never lose a paid-for response
+                    # The caller has already been billed for this response. A malformed
+                    # stream or an unwritable output directory must cost them a capture,
+                    # not the answer.
+                    print(f"ctxprofile: capture failed ({error})", file=sys.stderr)
 
-            self.send_response(upstream.status)
-            for key, value in upstream.getheaders():
-                if key.lower() not in _HOP_BY_HOP:
-                    self.send_header(key, value)
+            self.send_response(status)
+            for key, value in out_headers:
+                self.send_header(key, value)
             self.send_header("Content-Length", str(len(response_bytes)))
             self.end_headers()
             self.wfile.write(response_bytes)
-            conn.close()
 
     return Handler
 

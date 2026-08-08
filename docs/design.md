@@ -40,13 +40,15 @@ count, not a character ratio. That is the number the dead-tool figure is built
 on, which is why it is the one worth paying calls for.
 
 Per-tool marginals use leave-one-out against the full tool set, so the preamble
-the API adds once when any tool is present cancels out of every difference. What
-is left over after summing them — that preamble, plus any tokenizer boundary
-effect at the joins between schemas — is distributed across the tool rows and
-reported as `tool_overhead`, so the rows still sum to the measured tool block and
-nothing is quietly dropped. Message components stay estimated; there is no way to
-difference them out that doesn't cost a call per turn for a number that changes
-every request anyway.
+the API adds once when any tool is present cancels out of every difference. Each
+tool row is therefore its own *deletable* cost, which is the number a dead-tool
+report needs. What is left over after summing them — that preamble, plus any
+tokenizer boundary effect at the joins between schemas — becomes its own row
+rather than being folded into the tools, because deleting a tool does not recover
+it; smearing it would overstate every "remove this and save" figure and would
+mark a value as measured that no marginal produced. Message components stay
+estimated; there is no way to difference them out that doesn't cost a call per
+turn for a number that changes every request anyway.
 
 Measurement is opt-in and off by default: it needs an API key, the `anthropic`
 SDK (`ctxprofile[online]`), and roughly one call per tool. `--online-max-calls`
@@ -72,7 +74,7 @@ This is the part that matters. A tool that overclaims here is worse than none.
 | --- | --- |
 | Total input $ (with `usage`) | Exact |
 | Blended cache $ (with a cache split) | Exact |
-| Tools defined vs. called | Exact |
+| Tools defined vs. called | Exact — over the capture's request **and** its response |
 | Dead-tool token cost | Estimated tokens (~4 chars/token); **measured** with `--online`; list-price rate |
 | Per-component token split | Estimate (reconciled to the exact total) |
 | System and per-tool tokens with `--online` | Measured — a `count_tokens` marginal, not a heuristic |
@@ -83,8 +85,8 @@ This is the part that matters. A tool that overclaims here is worse than none.
 
 A caveat about the word *measured*: a marginal is a real tokenizer count, but it
 is a difference between two counts, so it inherits any rounding the endpoint
-does and any boundary effect between adjacent schemas. Those land in
-`tool_overhead` rather than being smeared silently across the rows. The
+does and any boundary effect between adjacent schemas. Those land in the tool
+block overhead row rather than being smeared silently across the tools. The
 arithmetic — that measured parts stay untouched, that the rest absorbs exactly
 the remainder of the billed total, that nothing sums to more or less than it
 should — is covered by tests against a counter with known additivity.

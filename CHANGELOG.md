@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.11.0
+
+- `analyze --online` and `mcp-audit --online`: measure the system prompt and each
+  tool definition against the `count_tokens` endpoint instead of estimating them.
+  Each tool row is its own leave-one-out marginal — what removing it actually
+  saves — and the shared tool-block overhead gets its own row rather than being
+  folded into the tools. Measured rows are marked `*` and carry `"exact": true`
+  in `--json`. Opt-in via the new `[online]` extra; the core stays offline and
+  dependency-free, and `--online-max-calls` refuses an oversized run up front.
+- Fix (correctness): a tool the model called in the capture's **response** was
+  reported as never called, so the dead-tool figure was overstated by the cost of
+  whichever tool the turn actually used — the normal shape of a captured agent
+  turn, on the one signal the docs graded exact.
+- Fix (correctness): a billed total of zero no longer zeroes every component
+  while still claiming reconciliation to usage.
+- Fix (correctness): two tools sharing a name no longer each bill the whole
+  measured tool block; neither claims the measurement.
+- Fix: a usage block that is present but inconsistent with the request is
+  reported as such, instead of the header claiming there was no usage block.
+- Fix: `capture` delivers the upstream response even when writing the capture
+  fails, and tolerates malformed streaming events instead of dropping a response
+  the caller was already billed for. Upstream network errors return 502 rather
+  than a dropped connection.
+- Fix: API errors from `--online` (bad key, rate limit, unreachable host) print
+  the usual one-line `error: ...` and exit 2 instead of an SDK traceback.
+- Fix: `tools/collect_mcp_tools.py` passes each server's configured `env`, so
+  servers needing credentials no longer contribute zero tools; a partial
+  collection now exits non-zero instead of looking like a complete measurement.
+- The `[online]` extra requires `anthropic>=0.41` — `client.messages.count_tokens`
+  does not exist in 0.40.
+
 ## 0.10.1
 
 - Fix: support both MCP SDK generations. 2.0 renamed the server class from

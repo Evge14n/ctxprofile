@@ -22,6 +22,26 @@ jobs:
       - run: mypy
       - run: pytest -q
 
+  # The zero-runtime-dependency claim, enforced rather than asserted: install the
+  # package with no extras and check that nothing optional leaked into an import.
+  core-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install . pytest
+      - name: no optional dependency came in with the base install
+        run: |
+          if pip list --format=freeze | grep -qE '^(anthropic|mcp)=='; then
+            pip list --format=freeze
+            echo "::error::installing ctxprofile pulled in an optional dependency"
+            exit 1
+          fi
+      - run: python -c "import ctxprofile, ctxprofile.cli, ctxprofile.cost, ctxprofile.online"
+      - run: pytest -q
+
   # The MCP SDK renamed its server class in 2.0; keep both paths working.
   mcp-compat:
     runs-on: ubuntu-latest

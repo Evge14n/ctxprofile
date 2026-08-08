@@ -44,6 +44,9 @@ class CostReport:
     total_usd_effective: float
     cached: bool
     measured_calls: int = 0
+    # A usage block was present and parseable. With `reconciled` false, that means the
+    # block was rejected as inconsistent with this request — not that it was missing.
+    usage_seen: bool = False
 
 
 @dataclass(frozen=True)

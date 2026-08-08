@@ -9,7 +9,7 @@ from ctxprofile import __version__
 from ctxprofile.budget import check, load_budget
 from ctxprofile.capture import serve
 from ctxprofile.compare import compare_payloads
-from ctxprofile.cost import analyze
+from ctxprofile.cost import TOOL_BLOCK_OVERHEAD, analyze
 from ctxprofile.ingest_sdk import parse_trace_file
 from ctxprofile.lockfile import build_lock, diff_lock, load_lock, static_summary, write_lock
 from ctxprofile.mcp_audit import AuditReport, audit
@@ -21,6 +21,8 @@ from ctxprofile.serialize import report_to_dict
 def format_report(report: CostReport) -> str:
     if report.reconciled:
         basis = "exact $ (reconciled to usage)"
+    elif report.usage_seen:
+        basis = "usage block inconsistent with this request — not reconciled"
     elif report.measured_calls:
         basis = "system + tools measured, rest estimated (no usage block)"
     else:
@@ -43,6 +45,11 @@ def format_report(report: CostReport) -> str:
             f"  * tokens measured with count_tokens ({report.measured_calls} calls); "
             f"unmarked rows are the ~4 chars/token estimate"
         )
+        if any(row.name == TOOL_BLOCK_OVERHEAD for row in report.components):
+            lines.append(
+                f"  {TOOL_BLOCK_OVERHEAD} is what having any tools at all costs; "
+                f"removing one tool does not recover it"
+            )
     lines.append(f"  total $ (cold, uncached upper bound): {report.total_usd_cold:.5f}")
     if report.cached:
         lines.append(f"  total $ (measured, blended cache):    {report.total_usd_effective:.5f}")
@@ -341,6 +348,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return int(args.func(args))
     except (
+        AttributeError,
         FileNotFoundError,
         KeyError,
         ValueError,

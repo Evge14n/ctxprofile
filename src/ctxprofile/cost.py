@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any
 
 from ctxprofile import pricing
@@ -8,6 +9,13 @@ from ctxprofile.ingest import parse_request
 from ctxprofile.models import KIND_TOOL_DEF, Component, ComponentCost, CostReport
 from ctxprofile.online import ExactSplit, TokenCounter, measure
 from ctxprofile.tokenizer import estimate_tokens
+
+# The shared cost of having any tools at all: the preamble the API adds once, plus
+# tokenizer effects at the joins between schemas. Named, not hidden, because it is the
+# one part of the tool block that removing a tool does not recover.
+TOOL_BLOCK_OVERHEAD = "(tool block overhead)"
+
+_TOOL_USE_BLOCKS = frozenset({"tool_use", "server_tool_use", "mcp_tool_use"})
 
 
 def _billed_input(usage: dict[str, Any] | None) -> int | None:
@@ -42,6 +50,48 @@ def _effective_rate(usage: dict[str, Any] | None, model: str) -> tuple[float, bo
     return billed / total, created > 0 or read > 0
 
 
+def called_in_response(response: Any) -> set[str]:
+    """Tool names the assistant invoked in this turn's response.
+
+    A capture holds the request's history plus the response it produced. The tool call
+    this turn made lives in the response and has not been echoed back into `messages`
+    yet, so reading only the request marks the tool the model just used as never called.
+    """
+    if not isinstance(response, dict):
+        return set()
+    called: set[str] = set()
+    for block in response.get("content") or []:
+        if not isinstance(block, dict):
+            continue
+        if block.get("type") in _TOOL_USE_BLOCKS and block.get("name"):
+            called.add(str(block["name"]))
+    return called
+
+
+def _apply_measurement(
+    components: list[Component], exact: ExactSplit | None
+) -> tuple[list[Component], dict[tuple[str, str], int]]:
+    """Attach measured token counts to the components they belong to.
+
+    Two things need care. A measurement is keyed by name, so if two tools share a name
+    there is no way to tell which row owns which count — those fall back to the estimate
+    rather than being counted twice. And the tool block costs more than the sum of the
+    per-tool marginals; that residual gets its own row instead of being folded into the
+    tools, because deleting a tool does not remove it.
+    """
+    if exact is None:
+        return components, {}
+
+    measured = exact.by_component()
+    seen = Counter((c.kind, c.name) for c in components)
+    measured = {key: value for key, value in measured.items() if seen[key] == 1}
+
+    if exact.tool_overhead > 0:
+        components = [*components, Component(KIND_TOOL_DEF, TOOL_BLOCK_OVERHEAD, "")]
+        measured[(KIND_TOOL_DEF, TOOL_BLOCK_OVERHEAD)] = exact.tool_overhead
+    return components, measured
+
+
 def _split_tokens(
     components: list[Component],
     measured: dict[tuple[str, str], int],
@@ -58,7 +108,9 @@ def _split_tokens(
     free = [i for i, value in enumerate(fixed) if value is None]
     tokens = [value if value is not None else heuristic[i] for i, value in enumerate(fixed)]
 
-    if billed is None:
+    # A billed total of zero describes no real request; scaling to it would zero every
+    # component while still calling the result exact.
+    if billed is None or billed <= 0:
         return tokens, False
 
     remainder = billed - sum(value for value in fixed if value is not None)
@@ -81,8 +133,9 @@ def build_report(
     usage: dict[str, Any] | None = None,
     exact: ExactSplit | None = None,
 ) -> CostReport:
-    measured = exact.by_component() if exact else {}
-    scaled, reconciled = _split_tokens(components, measured, _billed_input(usage))
+    components, measured = _apply_measurement(components, exact)
+    billed = _billed_input(usage)
+    scaled, reconciled = _split_tokens(components, measured, billed)
     grand = sum(scaled) or 1
 
     eff_rate, cached = _effective_rate(usage, model)
@@ -126,6 +179,7 @@ def build_report(
         total_effective,
         cached,
         measured_calls=exact.calls if exact else 0,
+        usage_seen=billed is not None,
     )
 
 
@@ -149,4 +203,6 @@ def analyze(
 
     exact = measure(request, model, counter, max_calls=max_calls) if counter else None
     components, defined, called = parse_request(request)
-    return build_report(components, defined, called, model, usage, exact)
+    return build_report(
+        components, defined, called | called_in_response(response), model, usage, exact
+    )

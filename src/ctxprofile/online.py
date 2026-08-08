@@ -17,7 +17,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from ctxprofile.apportion import apportion
 from ctxprofile.models import KIND_SYSTEM, KIND_TOOL_DEF
 
 # `count_tokens` rejects an empty `messages` array, so every probe carries this
@@ -40,10 +39,12 @@ class TokenCounter(Protocol):
 class ExactSplit:
     """Measured tokens for the components the API counts independently.
 
-    `tools` sums to `tools_total`: the shared tool-block overhead (the preamble
-    the API adds once when any tool is present, plus tokenizer boundary effects)
-    is distributed across the tool rows rather than left dangling, and reported
-    separately in `tool_overhead` so the distribution stays visible.
+    Each value in `tools` is that tool's own leave-one-out marginal — what you stop
+    paying if you remove it — which is the number the dead-tool figure needs. The
+    shared tool block carries more than the sum of those marginals: a preamble the
+    API adds once when any tool is present, plus tokenizer boundary effects. That
+    residual is `tool_overhead`, and it is deliberately not folded into the rows,
+    because it does not go away when you delete a tool.
     """
 
     system: int | None
@@ -62,7 +63,20 @@ class ExactSplit:
 
 
 def anthropic_counter(client: Any) -> TokenCounter:
-    """Adapt an `anthropic.Anthropic` client to the counter protocol."""
+    """Adapt an `anthropic.Anthropic` client to the counter protocol.
+
+    A bad key, a rate limit, or an unreachable host is an ordinary operating condition
+    here, so it is re-raised as a RuntimeError the CLI already reports as a one-line
+    error rather than an SDK traceback.
+    """
+    try:
+        from anthropic import AnthropicError
+
+        api_errors: tuple[type[BaseException], ...] = (AnthropicError,)
+    except ImportError:
+        # A caller can still drive this with their own client; there is just no SDK
+        # error class to translate.
+        api_errors = ()
 
     def count(
         *,
@@ -76,7 +90,10 @@ def anthropic_counter(client: Any) -> TokenCounter:
             kwargs["system"] = system
         if tools:
             kwargs["tools"] = tools
-        return int(client.messages.count_tokens(**kwargs).input_tokens)
+        try:
+            return int(client.messages.count_tokens(**kwargs).input_tokens)
+        except api_errors as error:
+            raise RuntimeError(f"count_tokens failed: {error}") from error
 
     return count
 
@@ -139,7 +156,8 @@ def measure(
     system_tokens = count(system=system) - floor if system else None
 
     tools = _tools(request)
-    names = [str(tool.get("name", f"<unnamed>[{i}]")) for i, tool in enumerate(tools)]
+    # Same fallback the ingest layer uses, so a measurement can find its component.
+    names = [str(tool.get("name", "<unnamed>")) for tool in tools]
     tool_tokens: dict[str, int] = {}
     tools_total = 0
     overhead = 0
@@ -147,18 +165,18 @@ def measure(
     if tools:
         tools_total = count(tools=tools) - floor
         if len(tools) == 1:
-            # Nothing to difference against; the single tool carries the whole block.
+            # Nothing to difference against, so the block minus the floor is this tool
+            # plus the preamble; charge it here and report no separable overhead.
             tool_tokens[names[0]] = tools_total
         else:
             # Leave-one-out: the shared preamble is present in both terms and cancels,
-            # so each marginal is that tool's own serialized cost.
+            # so each marginal is that tool's own serialized cost — the deletable part.
             marginals = [
                 max(0, tools_total - (count(tools=tools[:i] + tools[i + 1 :]) - floor))
                 for i in range(len(tools))
             ]
             overhead = tools_total - sum(marginals)
-            spread = apportion(marginals, tools_total)
-            for name, tokens in zip(names, spread, strict=True):
+            for name, tokens in zip(names, marginals, strict=True):
                 tool_tokens[name] = tool_tokens.get(name, 0) + tokens
 
     return ExactSplit(

@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from ctxprofile.cli import format_report, main
-from ctxprofile.cost import analyze, build_report
+from ctxprofile.cost import TOOL_BLOCK_OVERHEAD, analyze, build_report, called_in_response
 from ctxprofile.ingest import parse_request
 from ctxprofile.mcp_audit import audit
 from ctxprofile.models import (
@@ -76,19 +76,31 @@ def test_system_marginal_is_measured_not_estimated():
     assert split.system == 91
 
 
-def test_per_tool_costs_are_measured_and_sum_to_the_tool_block():
+def test_each_tool_row_is_its_own_deletable_cost_not_a_share_of_the_block():
     costs = {"read_file": 40, "write_file": 120, "web_search": 200}
     api = FakeAPI(system_cost=50, tool_costs=costs)
     split = measure(_request(list(costs)), "claude-opus-4-8", api)
 
     assert split.tools_total == FakeAPI.TOOL_PREAMBLE + sum(costs.values())
-    assert sum(split.tools.values()) == split.tools_total
+    # Each row is exactly what removing that tool saves — the shared preamble is not
+    # folded in, because deleting a tool does not recover it.
+    assert split.tools == costs
     assert split.tool_overhead == FakeAPI.TOOL_PREAMBLE
-    # The shared preamble is spread, so each tool lands at or just above its own cost
-    # while the ordering by real cost is preserved.
-    for name, own in costs.items():
-        assert split.tools[name] >= own
-    assert split.tools["web_search"] > split.tools["write_file"] > split.tools["read_file"]
+    assert sum(split.tools.values()) + split.tool_overhead == split.tools_total
+
+
+def test_the_shared_overhead_gets_its_own_row_rather_than_inflating_the_tools():
+    costs = {"read_file": 40, "web_search": 200}
+    api = FakeAPI(tool_costs=costs)
+    report = analyze({"request": _request(list(costs), system="")}, counter=api)
+
+    rows = {r.name: r for r in report.components}
+    assert rows["read_file"].tokens == 40
+    assert rows["web_search"].tokens == 200
+    assert rows[TOOL_BLOCK_OVERHEAD].tokens == FakeAPI.TOOL_PREAMBLE
+    # The overhead is not a declared tool, so it can never be reported as dead weight.
+    assert not rows[TOOL_BLOCK_OVERHEAD].unused
+    assert report.dead_tools == ["read_file", "web_search"]
 
 
 def test_a_single_tool_carries_the_whole_block():
@@ -166,10 +178,10 @@ def test_analyze_end_to_end_marks_the_measured_rows():
     report = analyze({"request": request}, counter=api)
 
     measured = {r.name for r in report.components if r.exact}
-    assert measured == {"system", "read_file", "web_search"}
+    assert measured == {"system", "read_file", "web_search", TOOL_BLOCK_OVERHEAD}
     assert report.measured_calls == api.calls
-    # Same split the ingest layer produces, so no component is invented or dropped.
-    assert len(report.components) == len(parse_request(request)[0])
+    # The ingest split, plus exactly one row for the shared tool-block overhead.
+    assert len(report.components) == len(parse_request(request)[0]) + 1
 
 
 def test_mcp_audit_uses_measured_tool_tokens_and_skips_the_system_call():
@@ -178,12 +190,10 @@ def test_mcp_audit_uses_measured_tool_tokens_and_skips_the_system_call():
     report = audit(_request(list(costs)), [], counter=api)
 
     by_server = {s.server: s for s in report.servers}
-    files = by_server["mcp__files"]
-    # Measured, not the ~4 chars/token estimate of a two-key schema stub.
-    assert files.tokens_per_request > 900
-    assert files.tokens_per_request + by_server["(local)"].tokens_per_request == 7 + sum(
-        costs.values()
-    )
+    # Measured, not the ~4 chars/token estimate of a two-key schema stub, and each
+    # server carries only its own tools' deletable cost.
+    assert by_server["mcp__files"].tokens_per_request == 400 + 600
+    assert by_server["(local)"].tokens_per_request == 100
     # floor + all-tools + one leave-one-out per tool; the system prompt is not measured.
     assert report.measured_calls == 2 + len(costs) == api.calls
 
@@ -209,6 +219,77 @@ def test_the_sdk_adapter_sends_only_the_fields_the_request_has():
     assert set(messages.seen[0]) == {"model", "messages"}
     assert set(messages.seen[1]) == {"model", "messages", "system", "tools"}
     assert messages.seen[1]["system"] == "s"
+
+
+def test_a_tool_called_in_the_response_is_not_reported_as_dead():
+    # A capture holds the request's history and the response it produced; the tool call
+    # this turn made lives in the response, not yet echoed into messages.
+    payload = {
+        "request": {
+            "model": "claude-opus-4-8",
+            "tools": [{"name": "write_file", "input_schema": {}}, {"name": "idle", "input_schema": {}}],
+            "messages": [{"role": "user", "content": "write it"}],
+        },
+        "response": {
+            "content": [{"type": "tool_use", "id": "tu1", "name": "write_file", "input": {}}],
+            "stop_reason": "tool_use",
+        },
+    }
+    report = analyze(payload)
+    assert report.dead_tools == ["idle"]
+    assert {r.name for r in report.components if r.unused} == {"idle"}
+
+
+def test_response_tool_use_extraction_ignores_malformed_content():
+    assert called_in_response(None) == set()
+    assert called_in_response({"content": "not a list"}) == set()
+    assert called_in_response({"content": [1, None, {"type": "text", "text": "x"}]}) == set()
+    assert called_in_response({"content": [{"type": "tool_use"}]}) == set()
+    assert called_in_response(
+        {"content": [{"type": "mcp_tool_use", "name": "mcp__files__read"}]}
+    ) == {"mcp__files__read"}
+
+
+def test_two_tools_sharing_a_name_are_not_counted_twice():
+    request = {
+        "model": "claude-opus-4-8",
+        "tools": [{"name": "dup", "input_schema": {"a": 1}}, {"name": "dup", "input_schema": {"b": 2}}],
+        "messages": [{"role": "user", "content": "hi"}],
+    }
+    api = FakeAPI(tool_costs={"dup": 100})
+    split = measure(request, "claude-opus-4-8", api)
+    report = analyze({"request": request}, counter=FakeAPI(tool_costs={"dup": 100}))
+
+    dup_rows = [r for r in report.components if r.name == "dup"]
+    assert len(dup_rows) == 2
+    # There is no way to tell which row owns the measurement, so neither claims it and
+    # both fall back to the estimate rather than each billing the whole block.
+    assert not any(r.exact for r in dup_rows)
+    assert sum(r.tokens for r in dup_rows) < 2 * split.tools_total
+
+
+def test_a_billed_total_of_zero_is_not_treated_as_an_exact_reconciliation():
+    components = [
+        Component(KIND_SYSTEM, "system", "s" * 400),
+        Component(KIND_CURRENT_USER, "user[0]", "u" * 400),
+    ]
+    report = build_report(components, set(), set(), "claude-opus-4-8", {"input_tokens": 0})
+
+    assert report.reconciled is False
+    assert all(r.tokens > 0 for r in report.components)
+    assert report.total_tokens == sum(r.tokens for r in report.components)
+
+
+def test_a_rejected_usage_block_is_not_reported_as_a_missing_one():
+    components = [Component(KIND_SYSTEM, "system", "s" * 100)]
+    exact = ExactSplit(system=9000, tools={}, tools_total=0, tool_overhead=0, calls=2)
+    report = build_report(
+        components, set(), set(), "claude-opus-4-8", {"input_tokens": 50}, exact
+    )
+
+    assert (report.reconciled, report.usage_seen) == (False, True)
+    assert "no usage block" not in format_report(report)
+    assert "inconsistent" in format_report(report)
 
 
 def test_default_counter_names_the_extra_when_the_sdk_is_missing(monkeypatch):

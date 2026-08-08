@@ -17,11 +17,18 @@ from pathlib import Path
 from typing import Any
 
 from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from mcp.client.stdio import get_default_environment, stdio_client
 
 
-async def list_tools(name: str, command: str, args: list[str], timeout: float) -> list[dict[str, Any]]:
-    params = StdioServerParameters(command=command, args=args)
+async def list_tools(
+    name: str, spec: dict[str, Any], timeout: float
+) -> list[dict[str, Any]]:
+    # Servers that need credentials get them from the config's own env block, merged
+    # over the SDK's default environment; without this they start and then fail.
+    env = {**get_default_environment(), **(spec.get("env") or {})}
+    params = StdioServerParameters(
+        command=spec["command"], args=spec.get("args", []), env=env
+    )
     tools: list[dict[str, Any]] = []
     async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
         await asyncio.wait_for(session.initialize(), timeout)
@@ -37,17 +44,31 @@ async def list_tools(name: str, command: str, args: list[str], timeout: float) -
     return tools
 
 
-async def collect(config: dict[str, Any], timeout: float) -> list[dict[str, Any]]:
+def _describe(error: BaseException) -> str:
+    """Flatten a TaskGroup's ExceptionGroup down to the error that actually happened."""
+    while isinstance(error, BaseExceptionGroup) and error.exceptions:
+        error = error.exceptions[0]
+    return f"{type(error).__name__}: {error}"
+
+
+async def collect(config: dict[str, Any], timeout: float) -> tuple[list[dict[str, Any]], list[str]]:
     collected: list[dict[str, Any]] = []
+    skipped: list[str] = []
     for name, spec in config.get("mcpServers", {}).items():
+        if not spec.get("command"):
+            # url / http entries speak a different transport than this collector.
+            print(f"  {name}: skipped (not a stdio server)")
+            skipped.append(name)
+            continue
         try:
-            tools = await list_tools(name, spec["command"], spec.get("args", []), timeout)
+            tools = await list_tools(name, spec, timeout)
         except Exception as error:  # noqa: BLE001 - one broken server must not lose the rest
-            print(f"  {name}: skipped ({type(error).__name__}: {error})")
+            print(f"  {name}: skipped ({_describe(error)})")
+            skipped.append(name)
             continue
         print(f"  {name}: {len(tools)} tools")
         collected.extend(tools)
-    return collected
+    return collected, skipped
 
 
 def main() -> int:
@@ -60,7 +81,7 @@ def main() -> int:
 
     config = json.loads(Path(args.config).read_text(encoding="utf-8"))
     print("collecting tools from MCP servers:")
-    tools = asyncio.run(collect(config, args.timeout))
+    tools, skipped = asyncio.run(collect(config, args.timeout))
 
     request = {
         "model": args.model,
@@ -72,6 +93,11 @@ def main() -> int:
         json.dumps(request, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     print(f"wrote {args.output}: {len(tools)} tool definitions")
+    if skipped:
+        # A partial collection understates the per-request cost, which is the one number
+        # this file exists to produce — so it must not look like a clean run.
+        print(f"incomplete: {len(skipped)} server(s) contributed nothing ({', '.join(skipped)})")
+        return 1
     return 0
 
 
