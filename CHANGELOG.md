@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.0
+
+- `tools/collect_mcp_tools.py`: connect to the MCP servers in a client config,
+  read their real tool schemas, and write an analyzable request — so you can
+  measure what your own servers cost per call.
+- `docs/case-study-mcp.md`: a real measurement of four popular MCP servers —
+  46 tool definitions, ~8,300 input tokens and about $0.04 on every request
+  before the user types anything, with the per-server breakdown.
+
 ## 0.9.0
 
 - Optional MCP server (`pip install "ctxprofile[mcp]"`, run `ctxprofile-mcp`):

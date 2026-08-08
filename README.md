@@ -25,6 +25,14 @@ model: claude-opus-4-8   input tokens: 900   exact $ (reconciled to usage)
 
 Half the input cost of that request is two tool definitions the model never used. You pay for them on every single call.
 
+**On real servers it gets worse.** Install four popular MCP servers — filesystem,
+memory, sequential-thinking, playwright — and before you type anything your
+request already carries **46 tool definitions, ~8,300 tokens, about $0.04 per
+call**. Tool schemas were 99.8% of that request's input, and one single tool
+(`sequentialthinking`) cost more than the entire filesystem server's twelve.
+Measured, reproducible, and written up in
+**[docs/case-study-mcp.md](docs/case-study-mcp.md)**.
+
 ## Install
 
 ```
@@ -165,6 +173,18 @@ Then add it to your MCP client (e.g. Claude Code):
 It exposes two tools — `analyze_request` (cost a captured request per component)
 and `audit_mcp_servers` (dead-tool cost by server). The core CLI stays
 dependency-free; only this optional server needs `mcp`.
+
+### Measure your own MCP servers
+
+The same extra ships a collector that connects to the servers in your MCP client
+config, reads their real tool schemas, and writes a request you can analyze:
+
+```
+python tools/collect_mcp_tools.py your-mcp-config.json -o mine.json
+ctxprofile analyze mine.json
+```
+
+That is how the numbers in the [case study](docs/case-study-mcp.md) were produced.
 
 ## What it does
 
