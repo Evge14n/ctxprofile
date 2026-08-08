@@ -38,6 +38,7 @@ def audit_to_dict(report: AuditReport) -> dict[str, Any]:
     return {
         "model": report.model,
         "window_api_calls": report.window_api_calls,
+        "measured_calls": report.measured_calls,
         "servers": [
             {
                 "server": s.server,

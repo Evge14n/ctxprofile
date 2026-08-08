@@ -184,6 +184,8 @@ mcp-audit   model: claude-opus-4-8   window: 3 model calls
   [window: 3 model calls — a rarely used tool can look unused in a short window]
 ```
 
+`mcp-audit` takes `--online` too, which measures each tool schema instead of estimating it — the same flag and the same `--online-max-calls` guard as `analyze`.
+
 `--defs` is a raw request (it carries the tool schemas, so the per-tool token estimate is grounded in the real schema text);
 `--traces` are SDK or `claude -p --output-format stream-json` transcripts (they
 carry the call counts). It reports a call **rate over a stated window**, never a
