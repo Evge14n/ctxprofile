@@ -19,7 +19,7 @@ import pytest
 
 anthropic = pytest.importorskip("anthropic", reason='needs pip install "ctxprofile[online]"')
 
-from ctxprofile.online import anthropic_counter, measure, planned_calls  # noqa: E402
+from ctxprofile.online import anthropic_counter, measure, planned_calls
 
 ENVELOPE = 11
 PER_MESSAGE = 3
