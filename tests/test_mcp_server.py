@@ -3,6 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
+pytest.importorskip("mcp", reason="the MCP server is an optional extra")
+
 from ctxprofile.mcp_server import analyze_request, audit_mcp_servers
 
 FIXTURES = Path(__file__).parent / "fixtures"

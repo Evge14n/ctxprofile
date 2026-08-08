@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.1
+
+- Fix: support both MCP SDK generations. 2.0 renamed the server class from
+  `FastMCP` to `MCPServer`, which broke the optional server on a fresh install;
+  the import now resolves either. CI runs the MCP tests against 1.28 and 2.0.
+- The MCP server's tests skip cleanly when the optional extra isn't installed.
+
 ## 0.10.0
 
 - `tools/collect_mcp_tools.py`: connect to the MCP servers in a client config,
