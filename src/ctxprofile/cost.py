@@ -3,8 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 from ctxprofile import pricing
+from ctxprofile.apportion import apportion
 from ctxprofile.ingest import parse_request
 from ctxprofile.models import KIND_TOOL_DEF, Component, ComponentCost, CostReport
+from ctxprofile.online import ExactSplit, TokenCounter, measure
 from ctxprofile.tokenizer import estimate_tokens
 
 
@@ -40,32 +42,47 @@ def _effective_rate(usage: dict[str, Any] | None, model: str) -> tuple[float, bo
     return billed / total, created > 0 or read > 0
 
 
+def _split_tokens(
+    components: list[Component],
+    measured: dict[tuple[str, str], int],
+    billed: int | None,
+) -> tuple[list[int], bool]:
+    """Token count per component, and whether it reconciles to the billed total.
+
+    Measured components keep their real counts. Whatever the billed total has left
+    over is apportioned across the remaining components by heuristic weight, so the
+    rows still sum to the exact billed input.
+    """
+    heuristic = [estimate_tokens(c.text) for c in components]
+    fixed = [measured.get((c.kind, c.name)) for c in components]
+    free = [i for i, value in enumerate(fixed) if value is None]
+    tokens = [value if value is not None else heuristic[i] for i, value in enumerate(fixed)]
+
+    if billed is None:
+        return tokens, False
+
+    remainder = billed - sum(value for value in fixed if value is not None)
+    if remainder < 0 or (not free and remainder != 0):
+        # The usage block doesn't describe this request shape (a measurement larger
+        # than the whole billed input, or nothing left to absorb the difference).
+        # Report what was measured rather than forcing a reconciliation.
+        return tokens, False
+
+    for i, share in zip(free, apportion([heuristic[i] for i in free], remainder), strict=True):
+        tokens[i] = share
+    return tokens, True
+
+
 def build_report(
     components: list[Component],
     defined: set[str],
     called: set[str],
     model: str,
     usage: dict[str, Any] | None = None,
+    exact: ExactSplit | None = None,
 ) -> CostReport:
-    tokens = [estimate_tokens(c.text) for c in components]
-    est_total = sum(tokens)
-
-    billed = _billed_input(usage)
-    reconciled = billed is not None
-
-    # When reconciled, the billed total is exact; apportion it across components by
-    # estimate weight with the largest-remainder (Hamilton) method, which keeps
-    # every part non-negative and makes the parts sum to the billed total exactly.
-    if reconciled and billed and est_total > 0:
-        exact = [t * billed / est_total for t in tokens]
-        scaled = [int(x) for x in exact]
-        shortfall = billed - sum(scaled)
-        for i in sorted(range(len(tokens)), key=lambda i: exact[i] - scaled[i], reverse=True)[
-            :shortfall
-        ]:
-            scaled[i] += 1
-    else:
-        scaled = list(tokens)
+    measured = exact.by_component() if exact else {}
+    scaled, reconciled = _split_tokens(components, measured, _billed_input(usage))
     grand = sum(scaled) or 1
 
     eff_rate, cached = _effective_rate(usage, model)
@@ -93,16 +110,31 @@ def build_report(
                 usd_cached=usd_cached,
                 usd_effective=usd_effective,
                 unused=unused,
+                exact=(component.kind, component.name) in measured,
             )
         )
 
     rows.sort(key=lambda r: r.usd_cold, reverse=True)
     return CostReport(
-        model, grand, reconciled, rows, dead, wasted, total_cold, total_effective, cached
+        model,
+        grand,
+        reconciled,
+        rows,
+        dead,
+        wasted,
+        total_cold,
+        total_effective,
+        cached,
+        measured_calls=exact.calls if exact else 0,
     )
 
 
-def analyze(payload: dict[str, Any], model_override: str | None = None) -> CostReport:
+def analyze(
+    payload: dict[str, Any],
+    model_override: str | None = None,
+    counter: TokenCounter | None = None,
+    max_calls: int | None = None,
+) -> CostReport:
     request = payload.get("request", payload)
     usage = None
     response = payload.get("response")
@@ -115,5 +147,6 @@ def analyze(payload: dict[str, Any], model_override: str | None = None) -> CostR
     if not model:
         raise ValueError("model not found in request; pass model_override / --model")
 
+    exact = measure(request, model, counter, max_calls=max_calls) if counter else None
     components, defined, called = parse_request(request)
-    return build_report(components, defined, called, model, usage)
+    return build_report(components, defined, called, model, usage, exact)

@@ -27,6 +27,9 @@ class ComponentCost:
     usd_cached: float
     usd_effective: float
     unused: bool = False
+    # True when this row's tokens were measured against the count_tokens endpoint
+    # rather than estimated by the offline heuristic.
+    exact: bool = False
 
 
 @dataclass(frozen=True)
@@ -40,6 +43,7 @@ class CostReport:
     total_usd_cold: float
     total_usd_effective: float
     cached: bool
+    measured_calls: int = 0
 
 
 @dataclass(frozen=True)

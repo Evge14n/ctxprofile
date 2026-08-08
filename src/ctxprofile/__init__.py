@@ -6,7 +6,7 @@ from ctxprofile.lockfile import build_lock, diff_lock, static_summary
 from ctxprofile.mcp_audit import AuditReport, ServerAudit, audit
 from ctxprofile.models import Component, ComponentCost, ComponentDelta, CostReport, ReportDiff
 
-__version__ = "0.10.1"
+__version__ = "0.11.0"
 
 __all__ = [
     "AuditReport",

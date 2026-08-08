@@ -16,6 +16,7 @@ def report_to_dict(report: CostReport) -> dict[str, Any]:
         "total_usd_effective": report.total_usd_effective,
         "dead_tools": report.dead_tools,
         "wasted_usd_cold": report.wasted_usd_cold,
+        "measured_calls": report.measured_calls,
         "components": [
             {
                 "name": r.name,
@@ -26,6 +27,7 @@ def report_to_dict(report: CostReport) -> dict[str, Any]:
                 "usd_cached": r.usd_cached,
                 "usd_effective": r.usd_effective,
                 "unused": r.unused,
+                "exact": r.exact,
             }
             for r in report.components
         ],
