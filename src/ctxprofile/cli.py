@@ -14,11 +14,17 @@ from ctxprofile.ingest_sdk import parse_trace_file
 from ctxprofile.lockfile import build_lock, diff_lock, load_lock, static_summary, write_lock
 from ctxprofile.mcp_audit import AuditReport, audit
 from ctxprofile.models import STATIC_KINDS, CostReport, ReportDiff
+from ctxprofile.online import default_counter
 from ctxprofile.serialize import report_to_dict
 
 
 def format_report(report: CostReport) -> str:
-    basis = "exact $ (reconciled to usage)" if report.reconciled else "estimated (no usage block)"
+    if report.reconciled:
+        basis = "exact $ (reconciled to usage)"
+    elif report.measured_calls:
+        basis = "system + tools measured, rest estimated (no usage block)"
+    else:
+        basis = "estimated (no usage block)"
     lines = [
         f"model: {report.model}   input tokens: {report.total_tokens}   {basis}",
         "",
@@ -26,11 +32,17 @@ def format_report(report: CostReport) -> str:
     ]
     for row in report.components:
         flag = "  [UNUSED]" if row.unused else ""
+        mark = "*" if row.exact else " "
         lines.append(
-            f"  {row.name[:21]:<22}{row.kind:<14}{row.tokens:>8}{row.pct:>6.1f}%"
+            f"  {row.name[:21]:<22}{row.kind:<14}{row.tokens:>7}{mark}{row.pct:>6.1f}%"
             f"{row.usd_cold:>10.5f}{row.usd_cached:>10.5f}{flag}"
         )
     lines.append("")
+    if report.measured_calls:
+        lines.append(
+            f"  * tokens measured with count_tokens ({report.measured_calls} calls); "
+            f"unmarked rows are the ~4 chars/token estimate"
+        )
     lines.append(f"  total $ (cold, uncached upper bound): {report.total_usd_cold:.5f}")
     if report.cached:
         lines.append(f"  total $ (measured, blended cache):    {report.total_usd_effective:.5f}")
@@ -204,7 +216,13 @@ def _cmd_ci(args: argparse.Namespace) -> int:
 
 def _cmd_analyze(args: argparse.Namespace) -> int:
     payload = json.loads(Path(args.payload).read_text(encoding="utf-8"))
-    report = analyze(payload, model_override=args.model)
+    counter = default_counter() if args.online else None
+    report = analyze(
+        payload,
+        model_override=args.model,
+        counter=counter,
+        max_calls=args.online_max_calls,
+    )
     if args.json:
         print(json.dumps(report_to_dict(report), ensure_ascii=False, indent=2))
     else:
@@ -220,6 +238,19 @@ def build_parser() -> argparse.ArgumentParser:
     an.add_argument("payload", help="path to a captured request JSON (or {request, response})")
     an.add_argument("--model", help="override the model id")
     an.add_argument("--json", action="store_true", help="emit JSON instead of a table")
+    an.add_argument(
+        "--online",
+        action="store_true",
+        help="measure system and per-tool tokens with count_tokens instead of estimating "
+        '(needs an API key and pip install "ctxprofile[online]")',
+    )
+    an.add_argument(
+        "--online-max-calls",
+        type=int,
+        default=64,
+        dest="online_max_calls",
+        help="refuse to run --online if it would need more count_tokens calls than this",
+    )
     an.set_defaults(func=_cmd_analyze)
 
     cmp = sub.add_parser("compare", help="show the token/$ delta between two captured requests")
@@ -293,7 +324,14 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return int(args.func(args))
-    except (FileNotFoundError, KeyError, ValueError, TypeError, json.JSONDecodeError) as error:
+    except (
+        FileNotFoundError,
+        KeyError,
+        ValueError,
+        TypeError,
+        RuntimeError,
+        json.JSONDecodeError,
+    ) as error:
         message = error.args[0] if error.args else error
         print(f"error: {message}", file=sys.stderr)
         return 2

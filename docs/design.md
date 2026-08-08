@@ -31,6 +31,27 @@ estimate — a stable ~4-chars/token heuristic — reconciled so the parts sum t
 the exact billed total. So the headline number is real and the split is a
 grounded guess, and the output says which is which.
 
+**And measured instead of estimated, when you ask for it.** `analyze --online`
+replaces the heuristic for the two components the API serializes independently
+of everything else: the system prompt and each individual tool definition. Each
+is measured as a *marginal* — the difference between a `count_tokens` call that
+carries the component and one that does not — so the number is a real tokenizer
+count, not a character ratio. That is the number the dead-tool figure is built
+on, which is why it is the one worth paying calls for.
+
+Per-tool marginals use leave-one-out against the full tool set, so the preamble
+the API adds once when any tool is present cancels out of every difference. What
+is left over after summing them — that preamble, plus any tokenizer boundary
+effect at the joins between schemas — is distributed across the tool rows and
+reported as `tool_overhead`, so the rows still sum to the measured tool block and
+nothing is quietly dropped. Message components stay estimated; there is no way to
+difference them out that doesn't cost a call per turn for a number that changes
+every request anyway.
+
+Measurement is opt-in and off by default: it needs an API key, the `anthropic`
+SDK (`ctxprofile[online]`), and roughly one call per tool. `--online-max-calls`
+caps that before anything is spent. The core stays offline and dependency-free.
+
 **A lockfile, because a one-shot analyzer decays to zero.** You read a cost
 breakdown once, nod, and never open it again. The habit is a `.ctxprofile.lock`
 with the muscle memory of `package-lock.json`: CI recomputes the static context
@@ -52,11 +73,21 @@ This is the part that matters. A tool that overclaims here is worse than none.
 | Total input $ (with `usage`) | Exact |
 | Blended cache $ (with a cache split) | Exact |
 | Tools defined vs. called | Exact |
-| Dead-tool token cost | Estimated tokens (~4 chars/token); list-price rate |
+| Dead-tool token cost | Estimated tokens (~4 chars/token); **measured** with `--online`; list-price rate |
 | Per-component token split | Estimate (reconciled to the exact total) |
+| System and per-tool tokens with `--online` | Measured — a `count_tokens` marginal, not a heuristic |
+| Message / history split with `--online` | Still an estimate; `--online` does not touch it |
 | Static-floor regression | Exact delta of a stable estimator |
 | Per-request dynamic cost (history, RAG, tool results) | Not locked — moves per call, not in the repo |
 | Cache-churn attribution | Not built — needs sequential, timestamped captures |
+
+A caveat about the word *measured*: a marginal is a real tokenizer count, but it
+is a difference between two counts, so it inherits any rounding the endpoint
+does and any boundary effect between adjacent schemas. Those land in
+`tool_overhead` rather than being smeared silently across the rows. The
+arithmetic — that measured parts stay untouched, that the rest absorbs exactly
+the remainder of the billed total, that nothing sums to more or less than it
+should — is covered by tests against a counter with known additivity.
 
 The lock covers only the static floor: the system prompt, the tool schemas, and
 the set of tools you ship. Per-request cost lives outside the repo and moves on

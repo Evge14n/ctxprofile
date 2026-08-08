@@ -85,6 +85,39 @@ compare (A -> B)   model: claude-opus-4-8
   dead tools: ['web_search', 'write_file'] -> ['write_file']
 ```
 
+## Measure instead of estimating (optional)
+
+The offline split is a ~4 chars/token heuristic. `--online` replaces it with a
+real count for the two parts the API serializes independently of everything
+else — the system prompt and each individual tool definition — by measuring each
+one as a marginal against the `count_tokens` endpoint. That is the number the
+dead-tool figure is built on, so it is the one worth measuring.
+
+```
+pip install "ctxprofile[online]"
+export ANTHROPIC_API_KEY=...
+ctxprofile analyze capture.json --online
+```
+
+```
+model: claude-opus-4-8   input tokens: 739   system + tools measured, rest estimated (no usage block)
+
+  component             kind            tokens      %    $ cold  $ cached
+  write_file            tool_def          241*  32.6%   0.00120   0.00012  [UNUSED]
+  web_search            tool_def          226*  30.6%   0.00113   0.00011  [UNUSED]
+  read_file             tool_def          185*  25.0%   0.00093   0.00009  [UNUSED]
+  system                system             85*  11.5%   0.00043   0.00004
+  user[0]               current_user        2    0.3%   0.00001   0.00000
+
+  * tokens measured with count_tokens (6 calls); unmarked rows are the ~4 chars/token estimate
+```
+
+Counting tokens is free but rate-limited, and this costs roughly one call per
+tool. `--online-max-calls` (default 64) refuses the run before spending
+anything if a request would exceed it. Message and history rows stay estimated —
+differencing them out would cost a call per turn for a number that changes every
+request anyway. The core CLI is unaffected: no key, no network, no dependencies.
+
 ## Lock the context floor and gate it in CI
 
 Treat your static context — the system prompt and the tool set you ship on every
@@ -198,6 +231,8 @@ That is how the numbers in the [case study](docs/case-study-mcp.md) were produce
 
 Tokens per component come from a stable offline heuristic (~4 chars/token). That estimate is only used for the **proportional** split; when the capture includes a real `usage` block, `ctxprofile` scales the split so the components sum to the exact billed input and prices the exact total. So the headline dollars are real; the per-component division is a grounded estimate, marked as such.
 
+With `--online`, the system prompt and every tool definition are measured against `count_tokens` instead of estimated, and only the remaining components share out what the billed total has left. Measured rows are marked `*` in the table and carry `"exact": true` in `--json`.
+
 ## What it can and can't tell you
 
 Owning the boundary is the point. Numbers are labelled by how much you can trust them.
@@ -207,8 +242,10 @@ Owning the boundary is the point. Numbers are labelled by how much you can trust
 | Total input $ (capture has `usage`) | Exact — from the billed usage block |
 | Blended cache $ (usage has a cache split) | Exact — from the cache buckets |
 | Which tools are defined vs. actually called | Exact — structural |
-| Dead-tool token cost | Estimated tokens (~4 chars/token, reconciled to the billed total); list-price rate |
+| Dead-tool token cost | Estimated tokens (~4 chars/token, reconciled to the billed total); **measured** with `--online`; list-price rate |
 | Per-component token split | Estimate — a stable ~4 chars/token heuristic, reconciled to the exact total |
+| System and per-tool tokens with `--online` | Measured — a `count_tokens` marginal, not a heuristic |
+| Message / history split with `--online` | Still an estimate — `--online` does not touch it |
 | Static-floor regression (`lock`) | Exact — the delta of the same estimator, so its bias cancels |
 | Per-request dynamic cost (history, RAG, tool results) | Not locked — it moves per call and isn't in your repo |
 | Cache-churn attribution | Not built — needs sequential, timestamped captures ([roadmap](#roadmap)) |
@@ -223,7 +260,6 @@ Context attribution is not a new idea. `context-lens` and `ContextSpy` are live 
 
 - Cache-churn cost: attribute a rebuilt cache prefix to the component that invalidated it (needs two sequential captures).
 - RAG-chunk attribution when retrieved context is tagged.
-- Optional exact per-component counts via the `count_tokens` endpoint.
 
 ## License
 
