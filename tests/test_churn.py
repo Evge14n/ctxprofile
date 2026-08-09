@@ -136,3 +136,11 @@ def test_captures_without_a_timestamp_or_usage_are_skipped_not_guessed():
 def test_a_single_capture_has_nothing_to_compare():
     report = analyze_churn([capture("2026-08-09T10:00:00+00:00", created=500)])
     assert (report.captures, report.events) == (1, [])
+
+
+def test_a_naive_timestamp_next_to_an_aware_one_does_not_break_the_corpus():
+    aware = capture("2026-08-09T10:00:00+00:00", system="old", read=500)
+    naive = capture("2026-08-09T10:00:30", system="new", created=500)
+    report = analyze_churn([aware, naive])
+    assert report.captures == 2
+    assert [e.cause for e in report.events] == ["system"]

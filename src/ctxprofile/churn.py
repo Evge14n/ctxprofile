@@ -17,7 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from itertools import pairwise
 from typing import Any
 
@@ -105,6 +105,10 @@ def _usable(captures: list[dict[str, Any]]) -> list[tuple[datetime, str, dict[st
             when = datetime.fromisoformat(str(at))
         except ValueError:
             continue
+        if when.tzinfo is None:
+            # A hand-written capture next to proxy-written ones would otherwise make
+            # the sort compare naive against aware and fail on the whole corpus.
+            when = when.replace(tzinfo=UTC)
         rows.append((when, str(at), request, usage))
     rows.sort(key=lambda row: row[0])
     return rows
