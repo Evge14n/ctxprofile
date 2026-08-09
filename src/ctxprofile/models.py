@@ -47,6 +47,9 @@ class CostReport:
     # A usage block was present and parseable. With `reconciled` false, that means the
     # block was rejected as inconsistent with this request — not that it was missing.
     usage_seen: bool = False
+    # Signed relative error of the offline estimator against the measured components,
+    # so the rows that were only estimated come with a sense of how far off they are.
+    estimator_error: float | None = None
 
 
 @dataclass(frozen=True)

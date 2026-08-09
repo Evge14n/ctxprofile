@@ -78,7 +78,7 @@ This is the part that matters. A tool that overclaims here is worse than none.
 | Dead-tool token cost | Estimated tokens (~4 chars/token); **measured** with `--online`; list-price rate |
 | Per-component token split | Estimate (reconciled to the exact total) |
 | System and per-tool tokens with `--online` | Measured — a `count_tokens` marginal, not a heuristic |
-| Message / history split with `--online` | Still an estimate; `--online` does not touch it |
+| Message / history split with `--online` | Still an estimate, with the estimator's measured error reported alongside it |
 | Static-floor regression | Exact delta of a stable estimator |
 | Per-request dynamic cost (history, RAG, tool results) | Not locked — moves per call, not in the repo |
 | Cache-churn attribution | Not built — needs sequential, timestamped captures |

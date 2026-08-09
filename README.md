@@ -115,6 +115,7 @@ model: claude-opus-4-8   input tokens: 900   exact $ (reconciled to usage)
 
   * tokens measured with count_tokens (6 calls); unmarked rows are the ~4 chars/token estimate
   (tool block overhead) is what having any tools at all costs; removing one tool does not recover it
+  on the rows it could check, the estimate ran 70% below the measured value — the unmarked rows carry that kind of error
   total $ (cold, uncached upper bound): 0.00450
   tools not called in this capture: web_search, write_file ($0.00228 at the cold rate if they are never called)
 ```
@@ -129,6 +130,11 @@ Each `*` tool row is that tool's **leave-one-out marginal** — what you stop
 paying if you delete it. The shared tool-block overhead is a separate row rather
 than being spread across the tools, because deleting a tool does not recover it;
 folding it in would overstate every "remove this and save" figure.
+
+Measuring part of a request also tells you something about the rest of it, so
+`--online` reports how far the heuristic was from the measured value on the rows
+it could check. That turns the estimate on the remaining rows from an unqualified
+guess into one whose error you know the size and direction of.
 
 Counting tokens is free but rate-limited, and this costs roughly one call per
 tool. `--online-max-calls` (default 64) refuses the run before spending
@@ -265,7 +271,7 @@ Owning the boundary is the point. Numbers are labelled by how much you can trust
 | Dead-tool token cost | Estimated tokens (~4 chars/token, reconciled to the billed total); **measured** with `--online`; list-price rate |
 | Per-component token split | Estimate — a stable ~4 chars/token heuristic, reconciled to the exact total |
 | System and per-tool tokens with `--online` | Measured — a `count_tokens` marginal, not a heuristic |
-| Message / history split with `--online` | Still an estimate — `--online` does not touch it |
+| Message / history split with `--online` | Still an estimate — but `--online` reports the estimator's measured error, so you know its size and direction |
 | Static-floor regression (`lock`) | Exact — the delta of the same estimator, so its bias cancels |
 | Per-request dynamic cost (history, RAG, tool results) | Not locked — it moves per call and isn't in your repo |
 | Cache-churn attribution | Not built — needs sequential, timestamped captures ([roadmap](#roadmap)) |

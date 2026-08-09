@@ -92,6 +92,33 @@ def _apply_measurement(
     return components, measured
 
 
+def _estimator_error(
+    components: list[Component], measured: dict[tuple[str, str], int]
+) -> float | None:
+    """How far the offline heuristic was from the measured value, where both exist.
+
+    Measuring some components tells you something about the ones you didn't measure:
+    if the ~4 chars/token rule ran 20% low on this request's tool schemas, the history
+    rows it also produced are probably off in the same direction. Reporting that is the
+    difference between an estimate and an estimate you know the size of.
+    """
+    heuristic = 0
+    real = 0
+    for component in components:
+        # The overhead row is measured but has no text, so it has no estimate to compare.
+        if component.name == TOOL_BLOCK_OVERHEAD:
+            continue
+        value = measured.get((component.kind, component.name))
+        if value is None:
+            continue
+        heuristic += estimate_tokens(component.text)
+        real += value
+    if real <= 0 or heuristic <= 0:
+        return None
+    # Relative to the measured value, so -0.7 reads as "the estimate was 70% below it".
+    return heuristic / real - 1.0
+
+
 def _split_tokens(
     components: list[Component],
     measured: dict[tuple[str, str], int],
@@ -180,6 +207,7 @@ def build_report(
         cached,
         measured_calls=exact.calls if exact else 0,
         usage_seen=billed is not None,
+        estimator_error=_estimator_error(components, measured),
     )
 
 

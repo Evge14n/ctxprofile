@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.2
+
+- `--online` now reports how far the offline estimator was from the measured
+  value on the rows it could check, so the rows it could not measure come with a
+  known error size and direction instead of an unqualified guess.
+
 ## 0.11.0
 
 - `analyze --online` and `mcp-audit --online`: measure the system prompt and each

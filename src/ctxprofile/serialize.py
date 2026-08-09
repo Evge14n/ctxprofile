@@ -18,6 +18,7 @@ def report_to_dict(report: CostReport) -> dict[str, Any]:
         "dead_tools": report.dead_tools,
         "wasted_usd_cold": report.wasted_usd_cold,
         "measured_calls": report.measured_calls,
+        "estimator_error": report.estimator_error,
         "components": [
             {
                 "name": r.name,

@@ -6,7 +6,9 @@ from typing import Any
 
 import pytest
 
+from ctxprofile.budget import Budget, check
 from ctxprofile.cli import format_report, main
+from ctxprofile.compare import compare_payloads
 from ctxprofile.cost import TOOL_BLOCK_OVERHEAD, analyze, build_report, called_in_response
 from ctxprofile.ingest import parse_request
 from ctxprofile.mcp_audit import audit
@@ -240,6 +242,29 @@ def test_a_tool_called_in_the_response_is_not_reported_as_dead():
     assert {r.name for r in report.components if r.unused} == {"idle"}
 
 
+def test_compare_and_ci_see_the_response_call_too():
+    # Every command routes through analyze, so the fix has to hold for all of them —
+    # a tool called in the response must not trip a max_dead_tools budget.
+    def payload(called: bool) -> dict[str, Any]:
+        return {
+            "request": {
+                "model": "claude-opus-4-8",
+                "tools": [{"name": "write_file", "input_schema": {}}],
+                "messages": [{"role": "user", "content": "go"}],
+            },
+            "response": {
+                "content": [{"type": "tool_use", "id": "t1", "name": "write_file", "input": {}}]
+                if called
+                else []
+            },
+        }
+
+    diff = compare_payloads(payload(False), payload(True))
+    assert (diff.dead_tools_a, diff.dead_tools_b) == (["write_file"], [])
+    assert check(analyze(payload(True)), Budget(max_dead_tools=0)) == []
+    assert check(analyze(payload(False)), Budget(max_dead_tools=0)) != []
+
+
 def test_response_tool_use_extraction_ignores_malformed_content():
     assert called_in_response(None) == set()
     assert called_in_response({"content": "not a list"}) == set()
@@ -290,6 +315,36 @@ def test_a_rejected_usage_block_is_not_reported_as_a_missing_one():
     assert (report.reconciled, report.usage_seen) == (False, True)
     assert "no usage block" not in format_report(report)
     assert "inconsistent" in format_report(report)
+
+
+def test_measuring_some_rows_reports_how_wrong_the_estimate_was():
+    # 400 characters of system text estimates to 100 tokens; measuring it at 200 means
+    # the estimate ran half the real value, which is what the unmeasured rows inherit.
+    components = [
+        Component(KIND_SYSTEM, "system", "s" * 400),
+        Component(KIND_CURRENT_USER, "user[0]", "u" * 400),
+    ]
+    exact = ExactSplit(system=200, tools={}, tools_total=0, tool_overhead=0, calls=2)
+    report = build_report(components, set(), set(), "claude-opus-4-8", None, exact)
+
+    assert report.estimator_error == pytest.approx(-0.5)
+    assert "50% below the measured value" in format_report(report)
+
+
+def test_the_overhead_row_is_left_out_of_the_calibration():
+    # It is measured but has no text, so including it would invent an error.
+    costs = {"read_file": 40, "web_search": 200}
+    report = analyze({"request": _request(list(costs), system="")}, counter=FakeAPI(tool_costs=costs))
+    assert report.estimator_error is not None
+
+    without_overhead = [r for r in report.components if r.name != TOOL_BLOCK_OVERHEAD]
+    assert len(without_overhead) < len(report.components)
+
+
+def test_no_calibration_is_reported_without_measurement():
+    report = analyze({"request": _request(["read_file"])})
+    assert report.estimator_error is None
+    assert "measured value" not in format_report(report)
 
 
 def test_default_counter_names_the_extra_when_the_sdk_is_missing(monkeypatch):

@@ -50,6 +50,12 @@ def format_report(report: CostReport) -> str:
                 f"  {TOOL_BLOCK_OVERHEAD} is what having any tools at all costs; "
                 f"removing one tool does not recover it"
             )
+        if report.estimator_error is not None:
+            direction = "above" if report.estimator_error > 0 else "below"
+            lines.append(
+                f"  on the rows it could check, the estimate ran {abs(report.estimator_error):.0%} "
+                f"{direction} the measured value — the unmarked rows carry that kind of error"
+            )
     lines.append(f"  total $ (cold, uncached upper bound): {report.total_usd_cold:.5f}")
     if report.cached:
         lines.append(f"  total $ (measured, blended cache):    {report.total_usd_effective:.5f}")
