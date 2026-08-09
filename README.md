@@ -142,6 +142,36 @@ anything if a request would exceed it. Message and history rows stay estimated �
 differencing them out would cost a call per turn for a number that changes every
 request anyway. The core CLI is unaffected: no key, no network, no dependencies.
 
+## Find out what keeps breaking your cache
+
+A cache hit costs 0.1× and a rebuild costs 1.25×, so a prompt edit that lands high
+in the prefix is expensive in a way the bill never spells out. The usage block
+tells you a rebuild happened; it cannot tell you what caused it. Two consecutive
+captures can, because the cause is the first place their prefixes differ.
+
+```
+ctxprofile churn captures/*.json
+```
+
+```
+churn   model: claude-opus-4-8   4 captures   1 rebuilds   ttl assumed 5m
+
+  when                 cause                               rebuilt   excess $
+  2026-08-09T11:43:32  system (system)                        1840    0.01058
+
+  total excess over cache reads: 0.01058
+```
+
+Appending a message is not a divergence — a conversation that only grew keeps its
+cached prefix, so the common case is correctly silent. When nothing changed, this
+refuses to invent a culprit: an unchanged prefix after longer than the TTL is
+reported as `ttl expiry`, and one inside the TTL as `unexplained`. Switching model
+gets its own label, because caches are model-scoped.
+
+The excess column is the honest number: what the rebuild cost *above* what a hit
+would have cost, not the whole write. Needs captures that carry `captured_at` and
+a `usage` block — which is what `ctxprofile capture` writes.
+
 ## Lock the context floor and gate it in CI
 
 Treat your static context — the system prompt and the tool set you ship on every
@@ -274,7 +304,7 @@ Owning the boundary is the point. Numbers are labelled by how much you can trust
 | Message / history split with `--online` | Still an estimate — but `--online` reports the estimator's measured error, so you know its size and direction |
 | Static-floor regression (`lock`) | Exact — the delta of the same estimator, so its bias cancels |
 | Per-request dynamic cost (history, RAG, tool results) | Not locked — it moves per call and isn't in your repo |
-| Cache-churn attribution | Not built — needs sequential, timestamped captures ([roadmap](#roadmap)) |
+| Cache-churn attribution | Attributed to the first diverging component; a rebuild with no divergence is labelled a TTL expiry or left unexplained |
 
 The full reasoning is in [docs/design.md](docs/design.md).
 
@@ -284,7 +314,6 @@ Context attribution is not a new idea. `context-lens` and `ContextSpy` are live 
 
 ## Roadmap
 
-- Cache-churn cost: attribute a rebuilt cache prefix to the component that invalidated it (needs two sequential captures).
 - RAG-chunk attribution when retrieved context is tagged.
 
 ## License

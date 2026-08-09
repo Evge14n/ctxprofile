@@ -3,11 +3,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 from ctxprofile import __version__
 from ctxprofile.budget import check, load_budget
 from ctxprofile.capture import serve
+from ctxprofile.churn import DEFAULT_TTL_SECONDS, ChurnReport, analyze_churn
 from ctxprofile.compare import compare_payloads
 from ctxprofile.cost import TOOL_BLOCK_OVERHEAD, analyze
 from ctxprofile.ingest_sdk import parse_trace_file
@@ -15,7 +17,7 @@ from ctxprofile.lockfile import build_lock, diff_lock, load_lock, static_summary
 from ctxprofile.mcp_audit import AuditReport, audit
 from ctxprofile.models import STATIC_KINDS, CostReport, ReportDiff
 from ctxprofile.online import default_counter
-from ctxprofile.serialize import report_to_dict
+from ctxprofile.serialize import churn_to_dict, report_to_dict
 
 
 def format_report(report: CostReport) -> str:
@@ -148,6 +150,73 @@ def format_audit(report: AuditReport, min_calls: int = 1) -> str:
             f"unused in a short window]"
         )
     return "\n".join(lines)
+
+
+def _humanize(seconds: float | None) -> str:
+    if seconds is None:
+        return ""
+    if seconds < 90:
+        return f"{seconds:.0f}s gap"
+    if seconds < 5400:
+        return f"{seconds / 60:.0f}m gap"
+    return f"{seconds / 3600:.1f}h gap"
+
+
+def format_churn(report: ChurnReport) -> str:
+    ttl = f"{report.ttl_seconds / 60:.0f}m"
+    lines = [
+        (
+            f"churn   model: {report.model or '?'}   {report.captures} captures   "
+            f"{len(report.events)} rebuilds   ttl assumed {ttl}"
+        )
+    ]
+    if report.captures < 2:
+        lines.append("")
+        lines.append(
+            "  needs at least two captures with a captured_at stamp and a usage block; "
+            "the built-in proxy writes both"
+        )
+        return "\n".join(lines)
+    if not report.events:
+        lines.append("")
+        lines.append("  no cache rebuilds in this window — the prefix held")
+        return "\n".join(lines)
+
+    lines += ["", f"  {'when':<21}{'cause':<34}{'rebuilt':>9}{'excess $':>11}"]
+    for event in report.events:
+        label = f"{event.cause} ({event.kind})" if event.kind else event.cause
+        note = _humanize(event.gap_seconds)
+        if event.cause in ("ttl expiry", "unexplained") and note:
+            label = f"{event.cause}, {note}"
+        # Seconds are enough to line the events up; microseconds only cost column width.
+        lines.append(
+            f"  {event.at[:19]:<21}{label[:33]:<34}{event.rebuilt_tokens:>9}{event.excess_usd:>11.5f}"
+        )
+
+    lines.append("")
+    lines.append(f"  total excess over cache reads: {report.total_excess_usd:.5f}")
+    worst: Counter[str] = Counter()
+    for event in report.events:
+        worst[event.cause] += 1
+    cause, count = worst.most_common(1)[0]
+    if count > 1:
+        spent = sum(e.excess_usd for e in report.events if e.cause == cause)
+        lines.append(f"  most frequent cause: {cause} ({count} rebuilds, {spent:.5f})")
+    lines.append(
+        "  captures are compared in timestamp order and assumed to be one lineage; "
+        "an unexplained rebuild is one this data cannot account for"
+    )
+    return "\n".join(lines)
+
+
+def _cmd_churn(args: argparse.Namespace) -> int:
+    captures = [json.loads(Path(path).read_text(encoding="utf-8")) for path in args.captures]
+    report = analyze_churn(captures, ttl_seconds=args.cache_ttl)
+    if args.json:
+        print(json.dumps(churn_to_dict(report), ensure_ascii=False, indent=2))
+    else:
+        print(format_churn(report))
+    return 0
 
 
 def _cmd_capture(args: argparse.Namespace) -> int:
@@ -331,6 +400,18 @@ def build_parser() -> argparse.ArgumentParser:
     ma.add_argument("--model", help="override the model id")
     _add_online_args(ma)
     ma.set_defaults(func=_cmd_mcp_audit)
+
+    ch = sub.add_parser("churn", help="attribute cache rebuilds to what invalidated the prefix")
+    ch.add_argument("captures", nargs="+", help="capture JSON files from the same run")
+    ch.add_argument(
+        "--cache-ttl",
+        type=float,
+        default=DEFAULT_TTL_SECONDS,
+        dest="cache_ttl",
+        help="cache lifetime in seconds; a rebuild after longer with nothing changed is an expiry",
+    )
+    ch.add_argument("--json", action="store_true", help="emit JSON instead of a table")
+    ch.set_defaults(func=_cmd_churn)
 
     cap = sub.add_parser("capture", help="forward-proxy that tees /v1/messages to capture files")
     cap.add_argument("--port", type=int, default=8787)

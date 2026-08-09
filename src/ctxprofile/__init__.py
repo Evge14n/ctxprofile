@@ -1,3 +1,4 @@
+from ctxprofile.churn import ChurnEvent, ChurnReport, analyze_churn
 from ctxprofile.compare import compare_payloads, diff_reports
 from ctxprofile.cost import analyze, build_report
 from ctxprofile.ingest import parse_request
@@ -6,10 +7,12 @@ from ctxprofile.lockfile import build_lock, diff_lock, static_summary
 from ctxprofile.mcp_audit import AuditReport, ServerAudit, audit
 from ctxprofile.models import Component, ComponentCost, ComponentDelta, CostReport, ReportDiff
 
-__version__ = "0.11.2"
+__version__ = "0.12.0"
 
 __all__ = [
     "AuditReport",
+    "ChurnEvent",
+    "ChurnReport",
     "Component",
     "ComponentCost",
     "ComponentDelta",
@@ -19,6 +22,7 @@ __all__ = [
     "Trace",
     "__version__",
     "analyze",
+    "analyze_churn",
     "audit",
     "build_lock",
     "build_report",

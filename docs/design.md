@@ -81,7 +81,7 @@ This is the part that matters. A tool that overclaims here is worse than none.
 | Message / history split with `--online` | Still an estimate, with the estimator's measured error reported alongside it |
 | Static-floor regression | Exact delta of a stable estimator |
 | Per-request dynamic cost (history, RAG, tool results) | Not locked — moves per call, not in the repo |
-| Cache-churn attribution | Not built — needs sequential, timestamped captures |
+| Cache-churn attribution | The diverging component, when two captures diverge; otherwise TTL expiry or unexplained |
 
 A caveat about the word *measured*: a marginal is a real tokenizer count, but it
 is a difference between two counts, so it inherits any rounding the endpoint
@@ -97,9 +97,16 @@ every call, so ctxprofile refuses to gate it. `mcp-audit` reports a call **rate
 over a stated window**, never a boolean "dead," because a tool used once a week
 looks unused in a short trace.
 
-Cache-churn — attributing a rebuilt cache prefix to the component that broke it —
-is designed but not shipped: doing it honestly needs at least two sequential
-captures of the same lineage *with wall-clock timestamps*, because without them
-you cannot tell content invalidation from a plain TTL expiry. `capture` stamps
-`captured_at` so the data exists when the feature lands; until then, the tool
-says it can't tell you, rather than guessing.
+Cache-churn attribution needed two things before it could be honest: two
+sequential captures of the same lineage, and wall-clock timestamps, because
+without the second you cannot tell a content change from a plain TTL expiry.
+`capture` stamps `captured_at`, so `ctxprofile churn` now does it — comparing the
+prefix in render order and blaming the first entry that actually differs.
+
+The restraint is in what it refuses to say. Appending a message is not a
+divergence, so a growing conversation reports nothing. A rebuild with an
+identical prefix is a TTL expiry if the gap exceeds the cache lifetime and
+`unexplained` if it does not — that second label is deliberate, because the
+alternative is blaming a component the data does not implicate. And the cost
+column is the excess over a cache read rather than the whole write, since the
+read is what you would have paid anyway.

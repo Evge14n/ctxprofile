@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.12.0
+
+- `churn` command: attribute a rebuilt prompt cache to the component that
+  invalidated it. Compares two consecutive captures in the API's render order —
+  tools, then system, then messages — and blames the first entry that actually
+  differs. Appending a message is not a divergence, so a growing conversation
+  reports nothing. A rebuild with an identical prefix is labelled a TTL expiry
+  when the gap exceeds the cache lifetime and `unexplained` when it does not,
+  rather than blaming a component the data does not implicate. The cost column
+  is the excess over what a cache read would have cost, not the whole write.
+  This closes the last item the design doc listed as designed-but-not-shipped.
+
 ## 0.11.2
 
 - `--online` now reports how far the offline estimator was from the measured

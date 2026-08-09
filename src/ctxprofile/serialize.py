@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ctxprofile.churn import ChurnReport
 from ctxprofile.mcp_audit import AuditReport
 from ctxprofile.models import CostReport
 
@@ -51,5 +52,25 @@ def audit_to_dict(report: AuditReport) -> dict[str, Any]:
                 "uncalled_tools": s.uncalled_tools,
             }
             for s in report.servers
+        ],
+    }
+
+
+def churn_to_dict(report: ChurnReport) -> dict[str, Any]:
+    return {
+        "model": report.model,
+        "captures": report.captures,
+        "ttl_seconds": report.ttl_seconds,
+        "total_excess_usd": report.total_excess_usd,
+        "events": [
+            {
+                "at": e.at,
+                "cause": e.cause,
+                "kind": e.kind,
+                "rebuilt_tokens": e.rebuilt_tokens,
+                "excess_usd": e.excess_usd,
+                "gap_seconds": e.gap_seconds,
+            }
+            for e in report.events
         ],
     }
