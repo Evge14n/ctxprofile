@@ -34,6 +34,14 @@ average filesystem tool.
 Measured, reproducible, and written up in
 **[docs/case-study-mcp.md](docs/case-study-mcp.md)**.
 
+**Across 19 published servers it is 186 tool definitions, ~52,000 tokens and
+$0.26 on every request** — a quarter of a 200K context window, spent before the
+user types. And two thirds of what those definitions ship is not language at all
+but the JSON structure around it, which is a measurement in characters that needs
+no tokenizer to believe. One server was 39% of that bill.
+The corpus and the method are in
+**[docs/mcp-tool-anatomy.md](docs/mcp-tool-anatomy.md)**.
+
 ## Install
 
 ```
@@ -274,7 +282,13 @@ python tools/collect_mcp_tools.py your-mcp-config.json -o mine.json
 ctxprofile analyze mine.json
 ```
 
-That is how the numbers in the [case study](docs/case-study-mcp.md) were produced.
+That is how the numbers in the [case study](docs/case-study-mcp.md) and the
+[anatomy survey](docs/mcp-tool-anatomy.md) were produced. To see what your own
+definitions are *made of* rather than what they cost:
+
+```
+python tools/tool_anatomy.py mine.json
+```
 
 ## What it does
 

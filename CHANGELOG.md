@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.1
+
+- `docs/mcp-tool-anatomy.md`: a survey of 19 published MCP servers — 186 tool
+  definitions, ~52,000 tokens and $0.26 on every request, a quarter of a 200K
+  context window before the user types. Two thirds of what those definitions
+  ship is JSON structure rather than language, measured in characters so the
+  finding does not rest on a tokenizer, with a sensitivity table showing how far
+  that assumption has to bend before the conclusion flips. The corpus ships as
+  `examples/mcp-survey.json` and `tools/tool_anatomy.py` recomputes every figure.
+
 ## 0.12.0
 
 - `churn` command: attribute a rebuilt prompt cache to the component that
