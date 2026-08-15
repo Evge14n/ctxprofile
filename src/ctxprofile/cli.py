@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 from collections import Counter
+from importlib import resources
 from pathlib import Path
 
 from ctxprofile import __version__
@@ -20,7 +21,20 @@ from ctxprofile.online import default_counter
 from ctxprofile.serialize import churn_to_dict, report_to_dict
 
 
-def format_report(report: CostReport) -> str:
+def _fit(name: str, width: int) -> str:
+    """Trim a name to width, keeping both ends.
+
+    MCP names are `mcp__server__tool`, so cutting the tail throws away the only part
+    that identifies the tool. Taking it out of the middle keeps both the server and
+    the tool readable.
+    """
+    if len(name) <= width:
+        return name
+    head = (width - 1) // 2
+    return f"{name[:head]}…{name[len(name) - (width - head - 1):]}"
+
+
+def format_report(report: CostReport, top: int | None = None) -> str:
     if report.reconciled:
         basis = "exact $ (reconciled to usage)"
     elif report.usage_seen:
@@ -32,15 +46,20 @@ def format_report(report: CostReport) -> str:
     lines = [
         f"model: {report.model}   input tokens: {report.total_tokens}   {basis}",
         "",
-        f"  {'component':<22}{'kind':<14}{'tokens':>8}{'%':>7}{'$ cold':>10}{'$ cached':>10}",
+        f"  {'component':<31}{'kind':<14}{'tokens':>8}{'%':>7}{'$ cold':>10}{'$ cached':>10}",
     ]
-    for row in report.components:
+    shown = report.components[:top] if top else report.components
+    for row in shown:
         flag = "  [UNUSED]" if row.unused else ""
         mark = "*" if row.exact else " "
         lines.append(
-            f"  {row.name[:21]:<22}{row.kind:<14}{row.tokens:>7}{mark}{row.pct:>6.1f}%"
+            f"  {_fit(row.name, 30):<31}{row.kind:<14}{row.tokens:>7}{mark}{row.pct:>6.1f}%"
             f"{row.usd_cold:>10.5f}{row.usd_cached:>10.5f}{flag}"
         )
+    hidden = len(report.components) - len(shown)
+    if hidden:
+        rest = sum(r.tokens for r in report.components[len(shown):])
+        lines.append(f"  ... and {hidden} more components totalling {rest:,} tokens")
     lines.append("")
     if report.measured_calls:
         lines.append(
@@ -62,11 +81,17 @@ def format_report(report: CostReport) -> str:
     if report.cached:
         lines.append(f"  total $ (measured, blended cache):    {report.total_usd_effective:.5f}")
     if report.dead_tools:
-        names = ", ".join(report.dead_tools)
+        # A request carrying an MCP server has dozens of these; listing them all turns
+        # the headline number into a wall of names nobody reads.
+        shown_names = report.dead_tools[:3]
+        names = ", ".join(shown_names)
+        if len(report.dead_tools) > len(shown_names):
+            names += f" and {len(report.dead_tools) - len(shown_names)} more"
         lines.append(
-            f"  tools not called in this capture: {names} "
-            f"(${report.wasted_usd_cold:.5f} at the cold rate if they are never called)"
+            f"  {len(report.dead_tools)} tools not called in this capture "
+            f"(${report.wasted_usd_cold:.5f} at the cold rate if they are never called):"
         )
+        lines.append(f"    {names}")
     else:
         lines.append("  tools not called in this capture: none")
     return "\n".join(lines)
@@ -219,6 +244,19 @@ def _cmd_churn(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_demo(args: argparse.Namespace) -> int:
+    """Run the tool on a bundled sample so a fresh install has something to show."""
+    sample = resources.files("ctxprofile") / "data" / "demo.json"
+    payload = json.loads(sample.read_text(encoding="utf-8"))
+    print("sample: four public MCP servers, as their tool schemas were actually published")
+    print()
+    print(format_report(analyze(payload, model_override=args.model), top=8))
+    print()
+    print("that is what those servers cost on every request, before anyone types a word.")
+    print("point it at your own: ctxprofile capture --out captures/   then analyze a capture")
+    return 0
+
+
 def _cmd_capture(args: argparse.Namespace) -> int:
     server = serve(args.port, args.out, args.upstream_host, args.upstream_port, not args.no_tls)
     print(f"ctxprofile capture on http://127.0.0.1:{args.port} -> {args.upstream_host}")
@@ -347,6 +385,9 @@ def build_parser() -> argparse.ArgumentParser:
     an.add_argument("payload", help="path to a captured request JSON (or {request, response})")
     an.add_argument("--model", help="override the model id")
     an.add_argument("--json", action="store_true", help="emit JSON instead of a table")
+    an.add_argument(
+        "--top", type=int, help="show only the N priciest components (all of them by default)"
+    )
     _add_online_args(an)
     an.set_defaults(func=_cmd_analyze)
 
@@ -412,6 +453,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ch.add_argument("--json", action="store_true", help="emit JSON instead of a table")
     ch.set_defaults(func=_cmd_churn)
+
+    dm = sub.add_parser("demo", help="run on a bundled sample of four real MCP servers")
+    dm.add_argument("--model", help="override the model id")
+    dm.set_defaults(func=_cmd_demo)
 
     cap = sub.add_parser("capture", help="forward-proxy that tees /v1/messages to capture files")
     cap.add_argument("--port", type=int, default=8787)

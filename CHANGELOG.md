@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.13.0
+
+- `demo` command: runs on a bundled sample of four real MCP servers, so a fresh
+  install has something to show without needing a capture first.
+- Long names keep both ends. MCP tools are named `mcp__server__tool`, and cutting
+  the tail threw away the only part that identified them — `mcp__playwright__brow`
+  was the same row for eight different tools.
+- `analyze --top N` shows the priciest components and accounts for the rest in one
+  line, instead of printing 46 rows for a request carrying an MCP server.
+- The dead-tool line reports a count and three names rather than listing all of
+  them; on a four-server request it was over 2,000 characters of names.
+- README leads with a demo image generated from a real run by
+  `tools/render_terminal_svg.py`, so the picture cannot drift from the output.
+
 ## 0.12.1
 
 - `docs/mcp-tool-anatomy.md`: a survey of 19 published MCP servers — 186 tool

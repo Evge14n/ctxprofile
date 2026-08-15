@@ -4,23 +4,45 @@
 
 **An offline CLI that costs a single LLM request per context component — and flags the tool definitions you ship on every request but never call.**
 
-You know your agent's requests are expensive. `ctxprofile` tells you *which part of the context* is spending the money: each individual tool schema, the system prompt, each history turn, each tool result — in tokens **and dollars** — from one captured request, with no proxy and no network.
+Your usage block gives you one input-token number. It does not tell you that four
+MCP servers put 46 tool schemas in front of every request, that they cost about
+$0.04 a call, or that the model never touched any of them.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/demo-dark.svg">
+  <img alt="ctxprofile demo: four MCP servers cost 8,299 tokens per request, none of them called" src="docs/demo-light.svg">
+</picture>
+
+```
+pip install git+https://github.com/Evge14n/ctxprofile
+ctxprofile demo
+```
+
+That image is the output of that command, rendered from a real run by
+[a committed script](tools/render_terminal_svg.py) so it cannot drift from what
+the tool actually prints. Zero runtime dependencies, no API key, no proxy — it
+reads a captured request and does arithmetic.
+
+---
+
+`ctxprofile` tells you *which part of the context* is spending the money: each individual tool schema, the system prompt, each history turn, each tool result — in tokens **and dollars** — from one captured request, with no proxy and no network.
 
 ```
 model: claude-opus-4-8   input tokens: 900   exact $ (reconciled to usage)
 
-  component             kind            tokens      %    $ cold  $ cached
-  write_file            tool_def           238  26.4%   0.00119   0.00012  [UNUSED]
-  web_search            tool_def           224  24.9%   0.00112   0.00011  [UNUSED]
-  read_file             tool_def           183  20.3%   0.00092   0.00009
-  system                system              85   9.4%   0.00043   0.00004
-  user[0]               history             51   5.7%   0.00026   0.00003
-  assistant[1]          history             41   4.6%   0.00020   0.00002
-  user[3]               current_user        41   4.6%   0.00020   0.00002
-  tool_result[2]        tool_result         37   4.1%   0.00018   0.00002
+  component                      kind            tokens      %    $ cold  $ cached
+  write_file                     tool_def          238   26.4%   0.00119   0.00012  [UNUSED]
+  web_search                     tool_def          224   24.9%   0.00112   0.00011  [UNUSED]
+  read_file                      tool_def          183   20.3%   0.00092   0.00009
+  system                         system             85    9.4%   0.00043   0.00004
+  user[0]                        history            51    5.7%   0.00026   0.00003
+  assistant[1]                   history            41    4.6%   0.00020   0.00002
+  user[3]                        current_user       41    4.6%   0.00020   0.00002
+  tool_result[2]                 tool_result        37    4.1%   0.00018   0.00002
 
   total $ (cold, uncached upper bound): 0.00450
-  tools not called in this capture: web_search, write_file ($0.00231 at the cold rate if they are never called)
+  2 tools not called in this capture ($0.00231 at the cold rate if they are never called):
+    web_search, write_file
 ```
 
 Half the input cost of that request is two tool definitions the model never used. You pay for them on every single call.
@@ -46,6 +68,7 @@ The corpus and the method are in
 
 ```
 pip install git+https://github.com/Evge14n/ctxprofile
+ctxprofile demo        # runs on a bundled sample of four real MCP servers
 ```
 
 Python 3.11+, zero runtime dependencies. A PyPI release is pending; after it,
@@ -110,22 +133,23 @@ ctxprofile analyze capture.json --online
 ```
 model: claude-opus-4-8   input tokens: 900   exact $ (reconciled to usage)
 
-  component             kind            tokens      %    $ cold  $ cached
-  write_file            tool_def          234*  26.0%   0.00117   0.00012  [UNUSED]
-  web_search            tool_def          221*  24.6%   0.00111   0.00011  [UNUSED]
-  read_file             tool_def          180*  20.0%   0.00090   0.00009
-  system                system             85*   9.4%   0.00043   0.00004
-  user[0]               history            52    5.8%   0.00026   0.00003
-  assistant[1]          history            42    4.7%   0.00021   0.00002
-  user[3]               current_user       41    4.6%   0.00020   0.00002
-  tool_result[2]        tool_result        38    4.2%   0.00019   0.00002
-  (tool block overhead) tool_def            7*   0.8%   0.00003   0.00000
+  component                      kind            tokens      %    $ cold  $ cached
+  write_file                     tool_def          234*  26.0%   0.00117   0.00012  [UNUSED]
+  web_search                     tool_def          221*  24.6%   0.00111   0.00011  [UNUSED]
+  read_file                      tool_def          180*  20.0%   0.00090   0.00009
+  system                         system             85*   9.4%   0.00043   0.00004
+  user[0]                        history            52    5.8%   0.00026   0.00003
+  assistant[1]                   history            42    4.7%   0.00021   0.00002
+  user[3]                        current_user       41    4.6%   0.00020   0.00002
+  tool_result[2]                 tool_result        38    4.2%   0.00019   0.00002
+  (tool block overhead)          tool_def            7*   0.8%   0.00003   0.00000
 
   * tokens measured with count_tokens (6 calls); unmarked rows are the ~4 chars/token estimate
   (tool block overhead) is what having any tools at all costs; removing one tool does not recover it
   on the rows it could check, the estimate ran 70% below the measured value — the unmarked rows carry that kind of error
   total $ (cold, uncached upper bound): 0.00450
-  tools not called in this capture: web_search, write_file ($0.00228 at the cold rate if they are never called)
+  2 tools not called in this capture ($0.00228 at the cold rate if they are never called):
+    web_search, write_file
 ```
 
 That is a real run of the command above on `examples/capture.json`, with the
