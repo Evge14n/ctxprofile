@@ -66,6 +66,12 @@ English words do not. One server was 39% of that bill.
 The corpus, the method and the tokenizer probe are in
 **[docs/mcp-tool-anatomy.md](docs/mcp-tool-anatomy.md)**.
 
+**And a third of that bill cannot be referenced at all.** 16,058 of those 52,035
+tokens are `$defs` entries no `$ref` reaches and JSON Schema document
+annotations — bytes that cannot change a single argument the model produces,
+paid on every call. `ctxprofile lint` names them, and `--write-slim` writes the
+stripped request so you can watch the number fall instead of taking my word.
+
 ## Install
 
 ```

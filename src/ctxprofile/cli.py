@@ -290,6 +290,12 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     print(format_report(analyze(payload, model_override=args.model), top=8))
     print()
     print("that is what those servers cost on every request, before anyone types a word.")
+    lint = lint_tools(payload.get("tools") or [])
+    if lint.removable_tokens:
+        print(
+            f"{lint.removable_tokens} of those tokens ({lint.removable_pct:.0f}%) are schema "
+            f"no tool call can reference — ctxprofile lint says which"
+        )
     print("point it at your own: ctxprofile capture --out captures/   then analyze a capture")
     return 0
 

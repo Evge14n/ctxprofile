@@ -179,3 +179,12 @@ def test_lint_caps_the_table_and_says_how_many_it_hid(
 
     main(["lint", str(path), "--top", "0"])
     assert "more (--top 0" not in capsys.readouterr().out
+
+
+def test_demo_points_at_lint_when_the_sample_carries_unreachable_weight(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["demo"]) == 0
+    out = capsys.readouterr().out
+    assert "no tool call can reference" in out
+    assert "ctxprofile lint" in out
