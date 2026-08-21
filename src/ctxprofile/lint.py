@@ -187,6 +187,19 @@ def _saving(tool: dict[str, Any], schema: dict[str, Any]) -> int:
     return max(0, _tokens([tool]) - _tokens([variant]))
 
 
+def unreachable_tokens(tools: Iterable[dict[str, Any]]) -> dict[str, int]:
+    """Per tool name, the estimated tokens no tool call can reference.
+
+    Duplicate names collapse onto one entry, the same way the cost report treats them.
+    """
+    tools = list(tools)
+    out: dict[str, int] = {}
+    for tool, slim in zip(tools, slim_tools(tools), strict=True):
+        name = str(tool.get("name", "<unnamed>"))
+        out[name] = out.get(name, 0) + max(0, _tokens([tool]) - _tokens([slim]))
+    return out
+
+
 def lint_tools(
     tools: Iterable[dict[str, Any]], measure: MeasureTools | None = None
 ) -> LintReport:

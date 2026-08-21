@@ -274,13 +274,30 @@ ctxprofile mcp-audit --defs request.json --traces runs/*.jsonl
 
 ```
 mcp-audit   model: claude-opus-4-8   window: 3 model calls
-  server                     tools  tok/req  calls  $/req cold
-  mcp__ruflo                     2      130      0     0.00065
-  mcp__files                     1       49      2     0.00024
-  (local)                        1       40      1     0.00020
+
+  server                     tools  tok/req  calls  $/req cold  unreachable
+  mcp__ruflo                     2      130      0     0.00065            -
+  mcp__files                     1       49      2     0.00024            -
+  (local)                        1       40      1     0.00020            -
 
   mcp__ruflo: 130 tok/req, 0 calls in 3 model calls — $0.00065 shipped every request
   [window: 3 model calls — a rarely used tool can look unused in a short window]
+```
+
+The `unreachable` column is the part of each server's bill that no tool call can
+reference (see below), so a server can be expensive *and* mostly removable. The
+same command over the [19-server corpus](examples/mcp-survey.json), first four
+rows:
+
+```
+mcp-audit   model: claude-opus-4-8   window: 3 model calls
+
+  server                     tools  tok/req  calls  $/req cold  unreachable
+  mcp__notion                   24    20148      0     0.10074  14274 (71%)
+  mcp__firecrawl                27     9782      0     0.04891     362 (4%)
+  mcp__github                   26     4329      0     0.02165     351 (8%)
+  mcp__playwright               24     4269      0     0.02135     349 (8%)
+  ... 15 more servers
 ```
 
 `mcp-audit` takes `--online` too, which measures each tool schema instead of estimating it — the same flag and the same `--online-max-calls` guard as `analyze`.

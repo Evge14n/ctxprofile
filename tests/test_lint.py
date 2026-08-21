@@ -302,3 +302,23 @@ def test_schema_and_comment_are_always_removable() -> None:
     slim = slim_tools([tool("a", schema)])[0]["input_schema"]
     assert "$schema" not in slim
     assert "$comment" not in slim
+
+
+def test_unreachable_tokens_is_reported_per_tool_name() -> None:
+    from ctxprofile.lint import unreachable_tokens
+
+    tools = [
+        tool("clean", {"type": "object", "properties": {"x": {"type": "string"}}}),
+        tool("heavy", {"type": "object", "properties": {}, "$defs": {"D": {"type": "string"}}}),
+    ]
+    per_tool = unreachable_tokens(tools)
+    assert per_tool["clean"] == 0
+    assert per_tool["heavy"] > 0
+
+
+def test_unreachable_tokens_folds_duplicate_names_together() -> None:
+    from ctxprofile.lint import unreachable_tokens
+
+    schema = {"type": "object", "properties": {}, "$defs": {"D": {"type": "string"}}}
+    one = unreachable_tokens([tool("same", schema)])["same"]
+    assert unreachable_tokens([tool("same", schema), tool("same", schema)])["same"] == one * 2

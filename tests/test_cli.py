@@ -188,3 +188,24 @@ def test_demo_points_at_lint_when_the_sample_carries_unreachable_weight(
     out = capsys.readouterr().out
     assert "no tool call can reference" in out
     assert "ctxprofile lint" in out
+
+
+def test_analyze_points_at_lint_when_there_is_weight_to_remove(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = _write_lint_request(tmp_path)
+    assert main(["analyze", str(path)]) == 0
+    assert "ctxprofile lint says which" in capsys.readouterr().out
+
+
+def test_analyze_stays_quiet_when_there_is_nothing_to_remove(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "clean.json"
+    clean = {
+        **LINT_REQUEST,
+        "tools": [t for t in LINT_REQUEST["tools"] if t["name"] == "clean"],
+    }
+    path.write_text(json.dumps(clean), encoding="utf-8")
+    assert main(["analyze", str(path)]) == 0
+    assert "lint says which" not in capsys.readouterr().out

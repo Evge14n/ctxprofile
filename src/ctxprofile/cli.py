@@ -158,12 +158,20 @@ def format_audit(report: AuditReport, min_calls: int = 1) -> str:
     lines = [
         f"mcp-audit   model: {report.model}   window: {report.window_api_calls} model calls{basis}",
         "",
-        f"  {'server':<26}{'tools':>6}{'tok/req':>9}{'calls':>7}{'$/req cold':>12}",
+        (
+            f"  {'server':<26}{'tools':>6}{'tok/req':>9}{'calls':>7}"
+            f"{'$/req cold':>12}{'unreachable':>13}"
+        ),
     ]
     for server in report.servers:
+        if server.unreachable_tokens and server.tokens_per_request:
+            pct = server.unreachable_tokens / server.tokens_per_request * 100
+            share = f"{server.unreachable_tokens} ({pct:.0f}%)"
+        else:
+            share = "-"
         lines.append(
-            f"  {server.server[:25]:<26}{server.tool_count:>6}{server.tokens_per_request:>9}"
-            f"{server.calls:>7}{server.usd_per_request_cold:>12.5f}"
+            f"  {_fit(server.server, 25):<26}{server.tool_count:>6}{server.tokens_per_request:>9}"
+            f"{server.calls:>7}{server.usd_per_request_cold:>12.5f}{share:>13}"
         )
     unused = [s for s in report.servers if s.calls < min_calls]
     if unused:
@@ -428,8 +436,22 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(report_to_dict(report), ensure_ascii=False, indent=2))
     else:
-        print(format_report(report))
+        print(format_report(report, top=args.top))
+        _mention_lint(payload.get("request", payload).get("tools") or [])
     return 0
+
+
+def _mention_lint(tools: list[dict[str, object]]) -> None:
+    """A pointer, not a second report: the weight is worth knowing about from `analyze`."""
+    lint = lint_tools(tools)
+    if not lint.removable_tokens:
+        return
+    print()
+    print(
+        f"  {lint.removable_tokens} of the tool-definition tokens "
+        f"({lint.removable_pct:.0f}%) are schema no tool call can reference "
+        f"— ctxprofile lint says which"
+    )
 
 
 def _add_online_args(parser: argparse.ArgumentParser) -> None:

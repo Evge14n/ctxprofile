@@ -66,3 +66,49 @@ def test_cli_mcp_audit(capsys: pytest.CaptureFixture[str]) -> None:
     out = capsys.readouterr().out
     assert "mcp__ruflo" in out
     assert "shipped every request" in out
+
+
+def test_audit_reports_the_unreachable_share_per_server() -> None:
+    from ctxprofile.mcp_audit import audit
+
+    request = {
+        "model": "claude-opus-4-8",
+        "messages": [],
+        "tools": [
+            {
+                "name": "mcp__srv__clean",
+                "description": "d",
+                "input_schema": {"type": "object", "properties": {"x": {"type": "string"}}},
+            },
+            {
+                "name": "mcp__srv__heavy",
+                "description": "d",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {},
+                    "$defs": {"Unused": {"type": "object", "description": "z" * 200}},
+                },
+            },
+        ],
+    }
+    server = audit(request, [])
+    row = server.servers[0]
+    assert row.server == "mcp__srv"
+    assert 0 < row.unreachable_tokens < row.tokens_per_request
+
+
+def test_audit_reports_no_unreachable_weight_for_clean_schemas() -> None:
+    from ctxprofile.mcp_audit import audit
+
+    request = {
+        "model": "claude-opus-4-8",
+        "messages": [],
+        "tools": [
+            {
+                "name": "mcp__srv__clean",
+                "description": "d",
+                "input_schema": {"type": "object", "properties": {"x": {"type": "string"}}},
+            }
+        ],
+    }
+    assert audit(request, []).servers[0].unreachable_tokens == 0

@@ -52,6 +52,7 @@ def audit_to_dict(report: AuditReport) -> dict[str, Any]:
                 "calls": s.calls,
                 "usd_per_request_cold": s.usd_per_request_cold,
                 "uncalled_tools": s.uncalled_tools,
+                "unreachable_tokens": s.unreachable_tokens,
             }
             for s in report.servers
         ],

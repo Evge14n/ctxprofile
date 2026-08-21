@@ -8,6 +8,7 @@ from typing import Any
 from ctxprofile import pricing
 from ctxprofile.ingest import parse_request
 from ctxprofile.ingest_sdk import Trace
+from ctxprofile.lint import unreachable_tokens
 from ctxprofile.lockfile import server_prefix
 from ctxprofile.models import KIND_TOOL_DEF
 from ctxprofile.online import TokenCounter, measure
@@ -24,6 +25,7 @@ class ServerAudit:
     calls: int
     usd_per_request_cold: float
     uncalled_tools: list[str]
+    unreachable_tokens: int = 0
 
 
 @dataclass(frozen=True)
@@ -58,6 +60,8 @@ def audit(
         tool_tokens.update(split.tools)
         measured_calls = split.calls
 
+    unreachable = unreachable_tokens(defs_request.get("tools") or [])
+
     calls: Counter[str] = Counter()
     window = 0
     for trace in traces:
@@ -73,6 +77,9 @@ def audit(
         tokens = sum(tool_tokens.get(t, 0) for t in tools)
         server_calls = sum(calls.get(t, 0) for t in tools)
         uncalled = [t for t in tools if calls.get(t, 0) == 0]
+        # Always the offline estimate, even when `tokens` was measured: capping it at the
+        # tool's own weight keeps the share honest if the two bases disagree.
+        dead_weight = min(tokens, sum(unreachable.get(t, 0) for t in tools))
         servers.append(
             ServerAudit(
                 server=server,
@@ -81,6 +88,7 @@ def audit(
                 calls=server_calls,
                 usd_per_request_cold=pricing.usd(tokens, model, "input"),
                 uncalled_tools=uncalled,
+                unreachable_tokens=dead_weight,
             )
         )
 
