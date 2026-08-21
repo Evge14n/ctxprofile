@@ -72,6 +72,11 @@ annotations — bytes that cannot change a single argument the model produces,
 paid on every call. `ctxprofile lint` names them, and `--write-slim` writes the
 stripped request so you can watch the number fall instead of taking my word.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/survey-dark.svg">
+  <img alt="Per-server tool-definition cost across 19 MCP servers, with the unreachable share of each" src="docs/survey-light.svg">
+</picture>
+
 ## Install
 
 ```

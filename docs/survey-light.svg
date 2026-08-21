@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="523" viewBox="0 0 880 523" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12">
+<rect width="880" height="523" rx="8" fill="#ffffff"/>
+<text x="20" y="34" fill="#010409" font-size="15">19 MCP servers, 186 tool definitions, 52,035 tokens on every request</text>
+<text x="20" y="55" fill="#656d76">16,058 of them (31%) are schema no tool call can reference</text>
+<text x="20" y="85" fill="#1f2328">notion</text>
+<rect x="162.0" y="74" width="118.9" height="13" fill="#7aa2cc"/>
+<rect x="280.8" y="74" width="288.8" height="13" fill="#bf8700"/>
+<text x="577.6" y="85" fill="#656d76">20,148 tok / 24 tools  71% unreachable</text>
+<text x="20" y="106" fill="#1f2328">firecrawl</text>
+<rect x="162.0" y="95" width="190.6" height="13" fill="#7aa2cc"/>
+<rect x="352.6" y="95" width="7.3" height="13" fill="#bf8700"/>
+<text x="367.9" y="106" fill="#656d76">9,782 tok / 27 tools  4% unreachable</text>
+<text x="20" y="127" fill="#1f2328">github</text>
+<rect x="162.0" y="116" width="80.5" height="13" fill="#7aa2cc"/>
+<rect x="242.5" y="116" width="7.1" height="13" fill="#bf8700"/>
+<text x="257.6" y="127" fill="#656d76">4,329 tok / 26 tools  8% unreachable</text>
+<text x="20" y="148" fill="#1f2328">playwright</text>
+<rect x="162.0" y="137" width="79.3" height="13" fill="#7aa2cc"/>
+<rect x="241.3" y="137" width="7.1" height="13" fill="#bf8700"/>
+<text x="256.3" y="148" fill="#656d76">4,269 tok / 24 tools  8% unreachable</text>
+<text x="20" y="169" fill="#1f2328">tavily</text>
+<rect x="162.0" y="158" width="41.2" height="13" fill="#7aa2cc"/>
+<text x="211.2" y="169" fill="#656d76">2,038 tok / 5 tools</text>
+<text x="20" y="190" fill="#1f2328">filesystem</text>
+<rect x="162.0" y="179" width="34.6" height="13" fill="#7aa2cc"/>
+<rect x="196.6" y="179" width="3.0" height="13" fill="#bf8700"/>
+<text x="207.6" y="190" fill="#656d76">1,858 tok / 12 tools  8% unreachable</text>
+<text x="20" y="211" fill="#1f2328">everything</text>
+<rect x="162.0" y="200" width="23.9" height="13" fill="#7aa2cc"/>
+<rect x="185.9" y="200" width="3.5" height="13" fill="#bf8700"/>
+<text x="197.4" y="211" fill="#656d76">1,355 tok / 13 tools  13% unreachable</text>
+<text x="20" y="232" fill="#1f2328">context7</text>
+<rect x="162.0" y="221" width="23.0" height="13" fill="#7aa2cc"/>
+<rect x="184.9" y="221" width="0.6" height="13" fill="#bf8700"/>
+<text x="193.6" y="232" fill="#656d76">1,166 tok / 2 tools  3% unreachable</text>
+<text x="20" y="253" fill="#1f2328">memory</text>
+<rect x="162.0" y="242" width="20.5" height="13" fill="#7aa2cc"/>
+<rect x="182.5" y="242" width="2.4" height="13" fill="#bf8700"/>
+<text x="192.9" y="253" fill="#656d76">1,134 tok / 9 tools  11% unreachable</text>
+<text x="20" y="274" fill="#1f2328">sequentialthinking</text>
+<rect x="162.0" y="263" width="20.4" height="13" fill="#7aa2cc"/>
+<rect x="182.3" y="263" width="0.3" height="13" fill="#bf8700"/>
+<text x="190.6" y="274" fill="#656d76">1,021 tok / 1 tool  1% unreachable</text>
+<text x="20" y="295" fill="#1f2328">figma</text>
+<rect x="162.0" y="284" width="19.1" height="13" fill="#7aa2cc"/>
+<rect x="181.0" y="284" width="0.5" height="13" fill="#bf8700"/>
+<text x="189.5" y="295" fill="#656d76">968 tok / 2 tools  3% unreachable</text>
+<text x="20" y="316" fill="#1f2328">slack</text>
+<rect x="162.0" y="305" width="17.1" height="13" fill="#7aa2cc"/>
+<text x="187.1" y="316" fill="#656d76">847 tok / 8 tools</text>
+<text x="20" y="337" fill="#1f2328">google-maps</text>
+<rect x="162.0" y="326" width="14.9" height="13" fill="#7aa2cc"/>
+<text x="184.9" y="337" fill="#656d76">737 tok / 7 tools</text>
+<text x="20" y="358" fill="#1f2328">puppeteer</text>
+<rect x="162.0" y="347" width="13.7" height="13" fill="#7aa2cc"/>
+<text x="183.7" y="358" fill="#656d76">677 tok / 7 tools</text>
+<text x="20" y="379" fill="#1f2328">exa</text>
+<rect x="162.0" y="368" width="9.2" height="13" fill="#7aa2cc"/>
+<rect x="171.2" y="368" width="0.5" height="13" fill="#bf8700"/>
+<text x="179.7" y="379" fill="#656d76">481 tok / 2 tools  5% unreachable</text>
+<text x="20" y="400" fill="#1f2328">gitlab</text>
+<rect x="162.0" y="389" width="5.7" height="13" fill="#7aa2cc"/>
+<rect x="167.7" y="389" width="2.4" height="13" fill="#bf8700"/>
+<text x="178.1" y="400" fill="#656d76">401 tok / 9 tools  29% unreachable</text>
+<text x="20" y="421" fill="#1f2328">sqlite</text>
+<rect x="162.0" y="410" width="6.7" height="13" fill="#7aa2cc"/>
+<rect x="168.7" y="410" width="1.4" height="13" fill="#bf8700"/>
+<text x="178.1" y="421" fill="#656d76">400 tok / 5 tools  17% unreachable</text>
+<text x="20" y="442" fill="#1f2328">brave-search</text>
+<rect x="162.0" y="431" width="7.8" height="13" fill="#7aa2cc"/>
+<text x="177.8" y="442" fill="#656d76">385 tok / 2 tools</text>
+<text x="20" y="463" fill="#1f2328">postgres</text>
+<rect x="162.0" y="452" width="0.8" height="13" fill="#7aa2cc"/>
+<text x="170.7" y="463" fill="#656d76">39 tok / 1 tool</text>
+<rect x="20" y="480" width="11" height="11" fill="#7aa2cc"/>
+<text x="38" y="489" fill="#656d76">schema a tool call can reference</text>
+<rect x="266" y="480" width="11" height="11" fill="#bf8700"/>
+<text x="284" y="489" fill="#656d76">unreferenced $defs and schema metadata — nothing can point at it</text>
+</svg>

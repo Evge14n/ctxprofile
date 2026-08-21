@@ -13,6 +13,8 @@ python tools/collect_mcp_tools.py your-config.json -o mine.json
 python tools/tool_anatomy.py mine.json
 python tools/bpe_probe.py mine.json     # needs tiktoken
 ctxprofile analyze mine.json
+ctxprofile lint mine.json
+python tools/render_survey_chart.py mine.json -o mine.svg --theme light
 ```
 
 The corpus used here is committed as
@@ -29,6 +31,15 @@ can be recomputed without installing anything.
 
 Every one of those tokens ships on **every** request for as long as the servers
 are installed, whether the session touches them or not.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="survey-dark.svg">
+  <img alt="19 MCP servers, 186 tool definitions, 52,035 tokens per request; 16,058 of them unreachable, most of it in notion" src="survey-light.svg">
+</picture>
+
+*Generated from the committed corpus by
+[`tools/render_survey_chart.py`](../tools/render_survey_chart.py), so the picture
+and the numbers come from the same data.*
 
 ## Where the bytes are
 
