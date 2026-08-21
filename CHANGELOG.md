@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.15.0
+
+- `mcp-audit` gains an `unreachable` column: the share of each server's bill that
+  no tool call can reference. That is the table where you decide which server to
+  remove, and notion being 71% unreachable changes what to do about it. The share
+  is always the offline estimate, capped at the server's own weight, so a measured
+  token count with an estimated remainder cannot produce more than 100%.
+- `analyze` prints a one-line pointer when a request carries removable weight, so
+  someone who never runs `lint` still learns it is there.
+- A figure in the survey and the README, generated from the committed corpus by
+  `tools/render_survey_chart.py`. The generator refuses to write an image whose
+  labels run past the edge — a clipped label is a silent failure otherwise.
+
 ## 0.14.0
 
 - `lint` command: finds tool-definition weight that no tool call can reference —
