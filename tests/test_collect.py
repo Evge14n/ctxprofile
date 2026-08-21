@@ -24,6 +24,12 @@ async def fake_lister(name: str, spec: dict, timeout: float) -> list[dict]:
     return [{"name": f"mcp__{name}__do", "description": "d", "input_schema": {"type": "object"}}]
 
 
+def _stub_sdk(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests are about collection, not about whether the optional SDK is installed."""
+    monkeypatch.setattr("ctxprofile.cli.ensure_sdk", lambda: None)
+    monkeypatch.setattr("ctxprofile.collect.list_tools", fake_lister)
+
+
 def test_a_broken_server_does_not_lose_the_working_ones() -> None:
     request, skipped = run(CONFIG, report=lambda _: None, lister=fake_lister)
     assert [tool["name"] for tool in request["tools"]] == ["mcp__good__do"]
@@ -58,7 +64,7 @@ def test_a_task_group_error_is_flattened_to_the_real_cause() -> None:
 def test_collect_writes_a_request_and_flags_an_incomplete_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("ctxprofile.collect.list_tools", fake_lister)
+    _stub_sdk(monkeypatch)
     config = tmp_path / "servers.json"
     config.write_text(json.dumps(CONFIG), encoding="utf-8")
     out = tmp_path / "mine.json"
@@ -72,7 +78,7 @@ def test_collect_writes_a_request_and_flags_an_incomplete_run(
 def test_collect_exits_clean_when_every_server_answers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("ctxprofile.collect.list_tools", fake_lister)
+    _stub_sdk(monkeypatch)
     config = tmp_path / "servers.json"
     config.write_text(json.dumps({"mcpServers": {"good": {"command": "npx"}}}), encoding="utf-8")
     assert main(["collect", str(config), "-o", str(tmp_path / "mine.json")]) == 0
