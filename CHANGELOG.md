@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.1
+
+- The `collect` CLI tests no longer need the optional MCP SDK. They inject their own
+  lister, so the SDK preflight was not what they were testing — and requiring it
+  broke `core-only`, the job that proves the zero-dependency claim. Tagged
+  separately so every tag is a commit CI was green on.
+
 ## 0.16.0
 
 - `ctxprofile collect` — the MCP collector is a command instead of a script in the
