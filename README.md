@@ -58,10 +58,12 @@ Measured, reproducible, and written up in
 
 **Across 19 published servers it is 186 tool definitions, ~52,000 tokens and
 $0.26 on every request** — a quarter of a 200K context window, spent before the
-user types. And two thirds of what those definitions ship is not language at all
-but the JSON structure around it, which is a measurement in characters that needs
-no tokenizer to believe. One server was 39% of that bill.
-The corpus and the method are in
+user types. Two thirds of what those definitions ship is not language at all but
+the JSON structure around it: a measurement in characters, so it needs no
+tokenizer to believe. Run it through four real BPE tokenizers and structure's
+share goes *up*, to 75–76%, because JSON punctuation fragments into tokens where
+English words do not. One server was 39% of that bill.
+The corpus, the method and the tokenizer probe are in
 **[docs/mcp-tool-anatomy.md](docs/mcp-tool-anatomy.md)**.
 
 ## Install

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.13.1
+
+- `tools/bpe_probe.py` and a rewritten section of the anatomy survey: the split
+  between language and JSON structure is now measured against four public BPE
+  tokenizers instead of resting on a sensitivity argument. The result reverses
+  the assumption behind that argument — JSON structure is *less* compressible
+  than prose (0.72×–0.74× the characters per token), so the flat estimate was
+  understating structure rather than overstating it, and its share is 75–76%
+  rather than 69%. None of 168 tools comes near the 2.28× that would have been
+  needed to reverse the finding. The probe cannot speak for Claude's tokenizer,
+  which is not public, and the document says so.
+
 ## 0.13.0
 
 - `demo` command: runs on a bundled sample of four real MCP servers, so a fresh

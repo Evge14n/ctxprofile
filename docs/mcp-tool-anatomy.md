@@ -11,6 +11,7 @@ Reproduce it:
 ```
 python tools/collect_mcp_tools.py your-config.json -o mine.json
 python tools/tool_anatomy.py mine.json
+python tools/bpe_probe.py mine.json     # needs tiktoken
 ctxprofile analyze mine.json
 ```
 
@@ -40,12 +41,39 @@ This part needs no tokenizer, so it is exact rather than estimated:
 Roughly two thirds of what a tool definition ships is not language. It is the
 scaffolding around the language.
 
-### Does that survive a better tokenizer?
+### Does that survive a real tokenizer?
 
-The estimate above applies one ratio to everything, and repetitive JSON almost
-certainly compresses better than English does. So the useful question is not what
-the split is under one assumption, but how far the assumption has to bend before
-the answer flips:
+The estimate above applies one ratio to everything, which cannot be right for two
+kinds of text at once. The obvious objection is that repetitive JSON should
+compress *better* than English, which would shrink structure's share.
+
+I assumed that too. It is backwards.
+
+Claude's tokenizer is not public, so this cannot say what Claude counts. But the
+objection rests on a property of BPE tokenizers, and several of those are public.
+Running this corpus through four of them
+([`tools/bpe_probe.py`](../tools/bpe_probe.py)):
+
+| encoding | prose chars/token | structure chars/token | ratio |
+| --- | ---: | ---: | ---: |
+| cl100k_base | 4.83 | 3.56 | 0.74× |
+| o200k_base | 4.82 | 3.55 | 0.74× |
+| p50k_base | 4.41 | 3.20 | 0.72× |
+| r50k_base | 4.40 | 3.20 | 0.73× |
+
+JSON structure is *less* compressible than prose, not more — consistently, across
+vocabularies from 50k to 200k. The reason is visible one token at a time: English
+words arrive whole (`Read`, ` the`, ` complete`, ` contents`), while JSON
+punctuation shatters into fragments (`{"`, `type`, `":`, `" "`, `object`, `",`).
+
+So the flat estimate was **understating** structure. Under these tokenizers its
+share is **75–76%**, not the 69% the character split gives. Per tool, the median
+ratio is 0.69× and the highest of 168 is 1.06× — none of them approach the 2.28×
+that would have been needed to reverse the finding.
+
+For completeness, here is what the flat estimate implied before it was measured —
+the row that actually applies is now the top one, and every row below it was the
+hypothetical that turned out not to happen:
 
 | JSON chars/token | structure tokens | prose tokens | structure share |
 | ---: | ---: | ---: | ---: |
@@ -54,12 +82,6 @@ the answer flips:
 | 8.0 | 16,701 | 14,715 | 53% |
 | 10.0 | 13,361 | 14,715 | 48% |
 | 12.0 | 11,134 | 14,715 | 43% |
-
-Prose only overtakes structure past **9.1 characters per token** for JSON — it
-would have to be 2.3× more compressible than English. That is not impossible for
-text this repetitive, which is why this is stated as a margin rather than a fact.
-The conclusion holds across the plausible range; it is not safe past the extreme
-end of it.
 
 ## The cost is not spread evenly
 
@@ -134,6 +156,12 @@ ones it does — which is what `ctxprofile analyze` and `mcp-audit` are for.
   The character split, the ratios between servers, and the concentration figures
   do not depend on it. `analyze --online` measures instead of estimating, and
   was not used here because it needs an API key.
+- **The BPE probe is not Claude's tokenizer.** It answers a narrower question —
+  whether JSON compresses better than prose, and by how much — on four public
+  vocabularies that agree with each other to within 0.02×. Treat it as strong
+  evidence about the *direction and rough size* of the effect, not as a token
+  count for any Anthropic model. The dollar figures in this document still come
+  from the flat estimate, so they are, if anything, low.
 - **19 servers is a sample, not the ecosystem.** They were picked as widely
   installed public npm packages, which biases toward mature, well-documented
   servers. A twentieth (sentry) refused to start without real credentials and is
