@@ -14,11 +14,15 @@ from ctxprofile.churn import DEFAULT_TTL_SECONDS, ChurnReport, analyze_churn
 from ctxprofile.compare import compare_payloads
 from ctxprofile.cost import TOOL_BLOCK_OVERHEAD, analyze
 from ctxprofile.ingest_sdk import parse_trace_file
+from ctxprofile.lint import LintReport, lint_tools, slim_tools
 from ctxprofile.lockfile import build_lock, diff_lock, load_lock, static_summary, write_lock
 from ctxprofile.mcp_audit import AuditReport, audit
 from ctxprofile.models import STATIC_KINDS, CostReport, ReportDiff
-from ctxprofile.online import default_counter
-from ctxprofile.serialize import churn_to_dict, report_to_dict
+from ctxprofile.online import TOOL_BLOCK_CALLS, default_counter, tool_block_counter
+from ctxprofile.pricing import usd
+from ctxprofile.serialize import churn_to_dict, lint_to_dict, report_to_dict
+
+DEFAULT_LINT_TOP = 20
 
 
 def _fit(name: str, width: int) -> str:
@@ -177,6 +181,39 @@ def format_audit(report: AuditReport, min_calls: int = 1) -> str:
     return "\n".join(lines)
 
 
+def format_lint(report: LintReport, model: str, top: int = DEFAULT_LINT_TOP) -> str:
+    basis = f"measured ({TOOL_BLOCK_CALLS} count_tokens calls)" if report.exact else "estimated"
+    lines = [f"lint   model: {model}   tool definitions: {report.baseline_tokens} tok ({basis})", ""]
+    if not report.findings:
+        lines.append("  no removable weight found")
+        return "\n".join(lines)
+    shown = report.findings[:top] if top > 0 else report.findings
+    lines.append(f"  {'tool':<32}{'check':<20}{'tok':>7}  what")
+    for finding in shown:
+        lines.append(
+            f"  {_fit(finding.tool, 31):<32}{finding.check:<20}{finding.tokens:>7}"
+            f"  {_fit(finding.detail, 40)}"
+        )
+    hidden = len(report.findings) - len(shown)
+    if hidden:
+        lines.append(f"  ... and {hidden} more (--top 0 for all, --json for the full list)")
+    by_check: Counter[str] = Counter(finding.check for finding in report.findings)
+    rollup = ", ".join(f"{check} in {count} tools" for check, count in by_check.most_common())
+    saved = usd(report.removable_tokens, model)
+    lines += [
+        "",
+        f"  {rollup}",
+        (
+            f"  removable: {report.removable_tokens} tok of {report.baseline_tokens} "
+            f"({report.removable_pct:.1f}%) — ${saved:.5f} per request, cold"
+        ),
+        "  nothing a tool call can reference: schema metadata and definitions no $ref reaches",
+    ]
+    if not report.exact:
+        lines.append("  [per-finding tokens are individual deltas; they need not sum to the total]")
+    return "\n".join(lines)
+
+
 def _humanize(seconds: float | None) -> str:
     if seconds is None:
         return ""
@@ -283,6 +320,34 @@ def _cmd_mcp_audit(args: argparse.Namespace) -> int:
         max_calls=args.online_max_calls,
     )
     print(format_audit(report, min_calls=args.min_calls))
+    return 0
+
+
+def _cmd_lint(args: argparse.Namespace) -> int:
+    payload = json.loads(Path(args.payload).read_text(encoding="utf-8"))
+    request = payload.get("request", payload)
+    tools = request.get("tools") or []
+    model = args.model or request.get("model")
+    if not model:
+        raise ValueError("model not found in request; pass --model")
+    measure = None
+    if args.online:
+        if TOOL_BLOCK_CALLS > args.online_max_calls:
+            raise ValueError(
+                f"--online needs {TOOL_BLOCK_CALLS} count_tokens calls, over the "
+                f"--online-max-calls limit of {args.online_max_calls}"
+            )
+        measure = tool_block_counter(default_counter(), model)
+    report = lint_tools(tools, measure=measure)
+    if args.write_slim:
+        slim = {**request, "tools": slim_tools(tools)}
+        Path(args.write_slim).write_text(
+            json.dumps(slim, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    if args.json:
+        print(json.dumps(lint_to_dict(report, model), ensure_ascii=False, indent=2))
+    else:
+        print(format_lint(report, model, top=args.top))
     return 0
 
 
@@ -422,6 +487,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ci.set_defaults(func=_cmd_ci)
 
+    lt = sub.add_parser("lint", help="find tool-schema weight no tool call can reference")
+    lt.add_argument("payload", help="path to a captured request JSON (or {request, response})")
+    lt.add_argument("--model", help="override the model id")
+    lt.add_argument("--json", action="store_true", help="emit JSON instead of a table")
+    lt.add_argument(
+        "--top",
+        type=int,
+        default=DEFAULT_LINT_TOP,
+        help=f"show only the N biggest findings (default {DEFAULT_LINT_TOP}, 0 for all)",
+    )
+    lt.add_argument(
+        "--write-slim",
+        dest="write_slim",
+        metavar="PATH",
+        help="write the request with the removable weight stripped, to check the saving",
+    )
+    _add_online_args(lt)
+    lt.set_defaults(func=_cmd_lint)
+
     lk = sub.add_parser("lock", help="write a static-context-floor lock file")
     lk.add_argument("--from", dest="from_capture", required=True, help="reference capture JSON")
     lk.add_argument("-o", "--output", default=".ctxprofile.lock", help="lock file path")
@@ -470,12 +554,20 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _force_utf8(stream: object) -> None:
+    """Windows consoles still default to cp437/cp1252, which cannot encode `—` or `…`."""
+    reconfigure = getattr(stream, "reconfigure", None)
+    if reconfigure is None:
+        return
+    try:
+        reconfigure(encoding="utf-8")
+    except (ValueError, OSError):
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        try:
-            sys.stdout.reconfigure(encoding="utf-8")
-        except (ValueError, OSError):
-            pass
+    _force_utf8(sys.stdout)
+    _force_utf8(sys.stderr)
     args = build_parser().parse_args(argv)
     try:
         return int(args.func(args))

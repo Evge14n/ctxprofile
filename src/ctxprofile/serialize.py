@@ -3,8 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 from ctxprofile.churn import ChurnReport
+from ctxprofile.lint import LintReport
 from ctxprofile.mcp_audit import AuditReport
 from ctxprofile.models import CostReport
+from ctxprofile.pricing import usd
 
 
 def report_to_dict(report: CostReport) -> dict[str, Any]:
@@ -72,5 +74,25 @@ def churn_to_dict(report: ChurnReport) -> dict[str, Any]:
                 "gap_seconds": e.gap_seconds,
             }
             for e in report.events
+        ],
+    }
+
+
+def lint_to_dict(report: LintReport, model: str) -> dict[str, Any]:
+    return {
+        "model": model,
+        "baseline_tokens": report.baseline_tokens,
+        "removable_tokens": report.removable_tokens,
+        "removable_pct": round(report.removable_pct, 2),
+        "removable_usd_cold": usd(report.removable_tokens, model),
+        "exact": report.exact,
+        "findings": [
+            {
+                "tool": f.tool,
+                "check": f.check,
+                "names": f.names,
+                "tokens": f.tokens,
+            }
+            for f in report.findings
         ],
     }

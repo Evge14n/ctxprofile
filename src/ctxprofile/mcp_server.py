@@ -4,8 +4,9 @@ from typing import Any
 
 from ctxprofile.cost import analyze
 from ctxprofile.ingest_sdk import iter_json_lines, parse_trace
+from ctxprofile.lint import lint_tools
 from ctxprofile.mcp_audit import audit
-from ctxprofile.serialize import audit_to_dict, report_to_dict
+from ctxprofile.serialize import audit_to_dict, lint_to_dict, report_to_dict
 
 
 def _server_class() -> Any:
@@ -37,6 +38,18 @@ def audit_mcp_servers(defs: dict[str, Any], traces_jsonl: str = "") -> dict[str,
     with call counts from a Claude Agent SDK / `claude -p` JSONL trace corpus."""
     traces = [parse_trace(iter_json_lines(traces_jsonl))] if traces_jsonl.strip() else []
     return audit_to_dict(audit(defs, traces))
+
+
+@mcp.tool()
+def lint_tool_schemas(capture: dict[str, Any], model: str | None = None) -> dict[str, Any]:
+    """Find tool-definition weight no tool call can reference: `$defs` entries that no
+    `$ref` reaches, and JSON Schema document annotations. Reports the tokens and dollars
+    per request that removing them would return."""
+    request = capture.get("request", capture)
+    resolved = model or request.get("model")
+    if not resolved:
+        raise ValueError("model not found in request; pass model")
+    return lint_to_dict(lint_tools(request.get("tools") or []), resolved)
 
 
 def main() -> None:

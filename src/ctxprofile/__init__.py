@@ -3,11 +3,12 @@ from ctxprofile.compare import compare_payloads, diff_reports
 from ctxprofile.cost import analyze, build_report
 from ctxprofile.ingest import parse_request
 from ctxprofile.ingest_sdk import Trace, parse_trace, parse_trace_file
+from ctxprofile.lint import Finding, LintReport, lint_tools, slim_tools
 from ctxprofile.lockfile import build_lock, diff_lock, static_summary
 from ctxprofile.mcp_audit import AuditReport, ServerAudit, audit
 from ctxprofile.models import Component, ComponentCost, ComponentDelta, CostReport, ReportDiff
 
-__version__ = "0.13.1"
+__version__ = "0.14.0"
 
 __all__ = [
     "AuditReport",
@@ -17,6 +18,8 @@ __all__ = [
     "ComponentCost",
     "ComponentDelta",
     "CostReport",
+    "Finding",
+    "LintReport",
     "ReportDiff",
     "ServerAudit",
     "Trace",
@@ -29,8 +32,10 @@ __all__ = [
     "compare_payloads",
     "diff_lock",
     "diff_reports",
+    "lint_tools",
     "parse_request",
     "parse_trace",
     "parse_trace_file",
+    "slim_tools",
     "static_summary",
 ]

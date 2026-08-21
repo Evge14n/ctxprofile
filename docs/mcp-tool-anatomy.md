@@ -24,6 +24,7 @@ can be recomputed without installing anything.
 ```
 19 servers   186 tool definitions   ~52,035 tokens   $0.2602 per request
   that is 26% of a 200K context window and 5% of a 1M one, spent before the user types
+  and 31% of it is schema no tool call can reference
 ```
 
 Every one of those tokens ships on **every** request for as long as the servers
@@ -83,6 +84,57 @@ hypothetical that turned out not to happen:
 | 10.0 | 13,361 | 14,715 | 48% |
 | 12.0 | 11,134 | 14,715 | 43% |
 
+## A third of it is unreachable
+
+Splitting prose from structure asks where the bytes are. A sharper question is
+whether the bytes can do anything at all.
+
+`ctxprofile lint` answers it with two structural checks. A `$defs` entry that no
+`$ref` reaches — transitively, from the schema root — cannot influence any
+argument the model produces: nothing can point at it. `$schema`, `$id`,
+`$comment` and `$anchor` are JSON Schema document annotations, describing the
+schema rather than the arguments. Both are free to delete in the strict sense
+that no tool call can tell the difference.
+
+Across the same 186 definitions:
+
+| check | tools affected | tokens |
+|---|---|---|
+| `unreferenced-defs` | 24 | 14,274 |
+| `schema-meta` | 131 | 1,784 |
+| **removable in total** | | **16,058 of 52,035 — 30.9%** |
+
+The per-check rows are individual deltas — what each check alone would remove —
+so they need not add up to the total, which is the one all-at-once measurement.
+
+That is **$0.0803 of the $0.2602 per request**, paid on every call, for bytes
+that cannot change a single argument.
+
+Almost all of it is one pattern. Notion generates its tool schemas from an
+OpenAPI document and copies the shared `$defs` registry into every tool.
+`API-get-user` takes one string — `user_id` — and ships nine definitions
+describing rich text, page parents, sort objects and block objects. It
+references none of them. Eighteen of Notion's twenty-four tools reference no
+definition at all; the remaining six use between one and four of the nine.
+
+This is not a criticism of writing schemas by hand. It is what code generation
+does when the generator has no reason to know that its output is priced per
+request.
+
+### Checking it rather than trusting it
+
+`--write-slim` writes the request with the removable weight stripped; running
+`analyze` on both files shows the total falling by exactly the promised amount,
+and a test in the repo asserts that round trip. The slimmed corpus was also
+checked for dangling `$ref` targets and for any change to `type`, `properties`,
+`required` or `additionalProperties` — there were none.
+
+Three further candidates were measured and deliberately **not** flagged:
+`additionalProperties` (3,728 tokens, 7.2% — but it changes validation under
+strict tool use), `default` (318) and `title` (108). The model can read those,
+so dropping them is a judgement call rather than a free win, and a linter that
+mixes the two kinds of advice is worth less than one that does not.
+
 ## The cost is not spread evenly
 
 | server | tools | tokens | $/req | tok/tool | prose |
@@ -137,12 +189,16 @@ one and does nothing for the other.
 
 For server authors, in rough order of leverage:
 
-1. **Look at schema surface before description length.** Flattening `$defs`,
+1. **Ship only what a tool call can reference.** A third of this corpus fails
+   that test — nearly all of it a shared `$defs` registry copied into tools that
+   reference none of it. `ctxprofile lint` names the entries; it is the one item
+   on this list with no trade-off attached.
+2. **Look at schema surface before description length.** Flattening `$defs`,
    dropping `additionalProperties: false` where it changes nothing, and not
    declaring optional fields nobody sets, all move the bigger number.
-2. **Splitting one tool into many is not free.** Every split repeats the whole
+3. **Splitting one tool into many is not free.** Every split repeats the whole
    JSON envelope.
-3. **A long description can be right** — but it should be paying for itself on
+4. **A long description can be right** — but it should be paying for itself on
    every request, not just the ones that use the tool.
 
 For anyone installing servers: the concentration is the lever. One server was

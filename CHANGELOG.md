@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.14.0
+
+- `lint` command: finds tool-definition weight that no tool call can reference —
+  `$defs` entries no `$ref` reaches (transitively, from the schema root) and
+  JSON Schema document annotations. On the committed 19-server corpus that is
+  **16,058 of 52,035 tool-definition tokens, 30.9%, $0.08 per request**, almost
+  all of it one pattern: Notion copies a shared `$defs` registry into every tool,
+  and eighteen of its twenty-four tools reference none of it.
+- Both checks are restricted to things that are provably free to remove.
+  `additionalProperties` (7.2% of the corpus), `default` and `title` were
+  measured and deliberately left alone: the model can read them, so dropping
+  them is a judgement call rather than a free win.
+- `--write-slim` writes the request with that weight stripped, so the claim can
+  be checked rather than taken. A test asserts that `analyze` on the slimmed file
+  falls by exactly the amount `lint` promised.
+- `--online` measures the saving against `count_tokens` (three calls: the
+  empty-tools floor, the full tool block, the slimmed one).
+- `lint_tool_schemas` added to the optional MCP server, so an agent can lint the
+  MCP schemas it is itself carrying.
+- Reference resolution handles the cases that would produce a *false* positive —
+  the dangerous direction. JSON Pointer escaping (`~1`, `~0`), pointers into a
+  definition rather than at it, references across `$defs` and `definitions`. A
+  schema holding an anchor, a URI reference or a `$dynamicRef` keeps all of its
+  definitions, and keeps `$id`/`$anchor`, rather than being guessed at.
+- `stderr` is forced to UTF-8 alongside `stdout`: legacy Windows code pages
+  cannot encode the `—` and `…` the tables use.
+
 ## 0.13.1
 
 - `tools/bpe_probe.py` and a rewritten section of the anatomy survey: the split

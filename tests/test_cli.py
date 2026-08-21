@@ -69,3 +69,113 @@ def test_demo_runs_on_bundled_data_with_no_arguments(capsys):
     out = capsys.readouterr().out
     assert "four public MCP servers" in out
     assert "8299" in out
+
+
+LINT_REQUEST = {
+    "model": "claude-sonnet-5",
+    "messages": [{"role": "user", "content": "hi"}],
+    "tools": [
+        {
+            "name": "clean",
+            "description": "a clean tool",
+            "input_schema": {"type": "object", "properties": {"x": {"type": "string"}}},
+        },
+        {
+            "name": "heavy",
+            "description": "a tool carrying weight nothing can reach",
+            "input_schema": {
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "type": "object",
+                "properties": {"y": {"type": "string"}},
+                "$defs": {"Unused": {"type": "object", "description": "z" * 300}},
+            },
+        },
+    ],
+}
+
+
+def _write_lint_request(tmp_path: Path) -> Path:
+    path = tmp_path / "request.json"
+    path.write_text(json.dumps(LINT_REQUEST), encoding="utf-8")
+    return path
+
+
+def test_lint_reports_removable_weight(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["lint", str(_write_lint_request(tmp_path))]) == 0
+    out = capsys.readouterr().out
+    assert "unreferenced-defs" in out
+    assert "schema-meta" in out
+    assert "clean" not in out.split("removable:")[0].replace("no removable", "")
+
+
+def test_lint_json_carries_the_dollar_figure(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["lint", str(_write_lint_request(tmp_path)), "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["removable_tokens"] > 0
+    assert data["removable_usd_cold"] > 0
+    assert data["exact"] is False
+    assert {f["check"] for f in data["findings"]} == {"unreferenced-defs", "schema-meta"}
+
+
+def test_lint_write_slim_produces_a_request_that_analyzes_lower(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = _write_lint_request(tmp_path)
+    slim = tmp_path / "slim.json"
+    main(["lint", str(source), "--json", "--write-slim", str(slim)])
+    claimed = json.loads(capsys.readouterr().out)["removable_tokens"]
+
+    main(["analyze", str(source), "--json"])
+    before = json.loads(capsys.readouterr().out)["total_tokens"]
+    main(["analyze", str(slim), "--json"])
+    after = json.loads(capsys.readouterr().out)["total_tokens"]
+    assert before - after == claimed, "the promised saving must be the saving analyze then shows"
+
+
+def test_lint_online_refuses_before_spending_when_over_the_call_budget(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rc = main(["lint", str(_write_lint_request(tmp_path)), "--online", "--online-max-calls", "1"])
+    assert rc != 0
+    assert "online-max-calls" in capsys.readouterr().err
+
+
+def test_lint_needs_a_model(tmp_path: Path) -> None:
+    path = tmp_path / "no-model.json"
+    path.write_text(json.dumps({"tools": [], "messages": []}), encoding="utf-8")
+    assert main(["lint", str(path)]) != 0
+
+
+def test_lint_baseline_matches_what_analyze_charges_for_tool_definitions(tmp_path: Path) -> None:
+    from ctxprofile.lint import lint_tools
+    from ctxprofile.models import KIND_TOOL_DEF
+
+    report = analyze(LINT_REQUEST)
+    from_analyze = sum(c.tokens for c in report.components if c.kind == KIND_TOOL_DEF)
+    assert lint_tools(LINT_REQUEST["tools"]).baseline_tokens == from_analyze
+
+
+def test_lint_caps_the_table_and_says_how_many_it_hid(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tools = [
+        {
+            "name": f"tool_{i}",
+            "description": "d",
+            "input_schema": {"$schema": "s", "type": "object", "properties": {}},
+        }
+        for i in range(25)
+    ]
+    path = tmp_path / "many.json"
+    path.write_text(
+        json.dumps({"model": "claude-sonnet-5", "messages": [], "tools": tools}), encoding="utf-8"
+    )
+    main(["lint", str(path), "--top", "5"])
+    out = capsys.readouterr().out
+    assert "... and 20 more" in out
+    assert "schema-meta in 25 tools" in out
+
+    main(["lint", str(path), "--top", "0"])
+    assert "more (--top 0" not in capsys.readouterr().out

@@ -14,6 +14,7 @@ but rate-limited, so the call count is bounded and reported.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -186,3 +187,25 @@ def measure(
         tool_overhead=overhead,
         calls=calls,
     )
+
+
+def tool_block_counter(counter: TokenCounter, model: str) -> Callable[[list[dict[str, Any]]], int]:
+    """Measure a tools array in isolation: the request with it, minus the one without.
+
+    The empty-tools floor is measured once and reused, so linting a pair of tool
+    arrays costs three `count_tokens` calls rather than four.
+    """
+    floor: list[int] = []
+
+    def measure(tools: list[dict[str, Any]]) -> int:
+        if not floor:
+            floor.append(counter(model=model, messages=PROBE_MESSAGES))
+        if not tools:
+            return 0
+        with_tools = counter(model=model, messages=PROBE_MESSAGES, tools=tools)
+        return max(0, with_tools - floor[0])
+
+    return measure
+
+
+TOOL_BLOCK_CALLS = 3

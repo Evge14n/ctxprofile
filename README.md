@@ -279,6 +279,65 @@ mcp-audit   model: claude-opus-4-8   window: 3 model calls
 carry the call counts). It reports a call **rate over a stated window**, never a
 boolean "dead" — a tool used once a week looks unused in a short trace.
 
+## Delete the bytes nothing can reference
+
+`mcp-audit` finds tools you never call. `lint` finds weight inside the tools you
+*do* call: schema that no tool call can reference, so removing it cannot change
+a single argument the model produces.
+
+```
+ctxprofile lint request.json
+```
+
+```
+lint   model: claude-opus-4-8   tool definitions: 52035 tok (estimated)
+
+  tool                            check                   tok  what
+  mcp__notion__AP…reate-a-comment unreferenced-defs       630  richTextRequest, pa…entRequest (+6 more)
+  mcp__notion__API-delete-a-block unreferenced-defs       630  richTextRequest, pa…entRequest (+6 more)
+  mcp__notion__AP…-block-children unreferenced-defs       630  richTextRequest, pa…entRequest (+6 more)
+  ... and 152 more (--top 0 for all, --json for the full list)
+
+  schema-meta in 131 tools, unreferenced-defs in 24 tools
+  removable: 16058 tok of 52035 (30.9%) — $0.08029 per request, cold
+  nothing a tool call can reference: schema metadata and definitions no $ref reaches
+  [per-finding tokens are individual deltas; they need not sum to the total]
+```
+
+That run is the [19-server corpus](examples/mcp-survey.json) behind the
+[tool-anatomy study](docs/mcp-tool-anatomy.md): **31% of the whole tool-definition
+budget is weight no tool call can reach.** Almost all of it is one pattern —
+Notion generates its tool schemas from an OpenAPI document and copies the shared
+`$defs` registry into every tool, so `API-get-user` (one string parameter) ships
+nine definitions describing rich text, page parents and block objects, and
+references none of them.
+
+Two checks, both restricted to things that are *provably* free:
+
+| check | what it flags | why removal is safe |
+| --- | --- | --- |
+| `unreferenced-defs` | entries in `$defs` / `definitions` that no `$ref` reaches from the schema root, transitively | nothing can point at them, so no argument can depend on them |
+| `schema-meta` | `$schema`, `$id`, `$comment`, `$anchor` | JSON Schema document annotations: they describe the schema, not the arguments |
+
+A schema carrying a `$dynamicRef`, or a `$ref` this linter cannot resolve, has its
+definitions left alone rather than guessed at.
+
+Deliberately **not** flagged: `additionalProperties` (7.2% of the corpus, but it
+changes validation under strict tool use), `default`, `title`, `examples`. The
+model can read those, so dropping them is a judgement call rather than a free win.
+
+`--write-slim out.json` writes the request with the removable weight stripped, so
+you can check the claim instead of taking it:
+
+```
+ctxprofile lint request.json --write-slim slim.json
+ctxprofile analyze slim.json          # the total drops by exactly what lint promised
+```
+
+A test asserts that round trip, so the promise cannot drift from the arithmetic.
+`--online` measures the saving against `count_tokens` instead of estimating it —
+three calls: the empty-tools floor, the full block, the slimmed block.
+
 ## Use it from an agent (MCP server)
 
 ctxprofile ships an optional MCP server, so a Claude agent can profile its own
@@ -294,9 +353,11 @@ Then add it to your MCP client (e.g. Claude Code):
 { "mcpServers": { "ctxprofile": { "command": "ctxprofile-mcp" } } }
 ```
 
-It exposes two tools — `analyze_request` (cost a captured request per component)
-and `audit_mcp_servers` (dead-tool cost by server). The core CLI stays
-dependency-free; only this optional server needs `mcp`.
+It exposes three tools — `analyze_request` (cost a captured request per
+component), `audit_mcp_servers` (dead-tool cost by server) and
+`lint_tool_schemas` (weight no tool call can reference), so an agent can lint the
+MCP schemas it is itself carrying. The core CLI stays dependency-free; only this
+optional server needs `mcp`.
 
 ### Measure your own MCP servers
 
@@ -314,6 +375,7 @@ definitions are *made of* rather than what they cost:
 
 ```
 python tools/tool_anatomy.py mine.json
+ctxprofile lint mine.json
 ```
 
 ## What it does
@@ -345,6 +407,7 @@ Owning the boundary is the point. Numbers are labelled by how much you can trust
 | Static-floor regression (`lock`) | Exact — the delta of the same estimator, so its bias cancels |
 | Per-request dynamic cost (history, RAG, tool results) | Not locked — it moves per call and isn't in your repo |
 | Cache-churn attribution | Attributed to the first diverging component; a rebuild with no divergence is labelled a TTL expiry or left unexplained |
+| Unreachable schema weight (`lint`) | Exact — structural: a definition no `$ref` reaches cannot affect a tool call. Its **token** cost is estimated, or measured with `--online` |
 
 The full reasoning is in [docs/design.md](docs/design.md).
 
@@ -355,6 +418,7 @@ Context attribution is not a new idea. `context-lens` and `ContextSpy` are live 
 ## Roadmap
 
 - RAG-chunk attribution when retrieved context is tagged.
+- More `lint` checks, as long as each one stays provably free to apply.
 
 ## License
 
