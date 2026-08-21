@@ -26,3 +26,12 @@ def test_missing_file_is_a_clean_error(capsys: pytest.CaptureFixture[str]) -> No
 def test_ci_without_budget_or_lock_returns_2(capsys: pytest.CaptureFixture[str]) -> None:
     rc = main(["ci", str(FIXTURES / "capture.json")])
     assert rc == 2
+
+
+def test_a_missing_file_names_the_file_rather_than_an_errno(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["analyze", "no-such-capture.json"]) == 2
+    err = capsys.readouterr().err
+    assert "no-such-capture.json" in err
+    assert err.strip() != "error: 2", "OSError.args[0] is the errno, not the message"

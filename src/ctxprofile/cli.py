@@ -11,6 +11,8 @@ from ctxprofile import __version__
 from ctxprofile.budget import check, load_budget
 from ctxprofile.capture import serve
 from ctxprofile.churn import DEFAULT_TTL_SECONDS, ChurnReport, analyze_churn
+from ctxprofile.collect import DEFAULT_MODEL, DEFAULT_TIMEOUT, ensure_sdk
+from ctxprofile.collect import run as collect_run
 from ctxprofile.compare import compare_payloads
 from ctxprofile.cost import TOOL_BLOCK_OVERHEAD, analyze
 from ctxprofile.ingest_sdk import parse_trace_file
@@ -365,6 +367,23 @@ def _cmd_lint(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_collect(args: argparse.Namespace) -> int:
+    ensure_sdk()
+    config = json.loads(Path(args.config).read_text(encoding="utf-8"))
+    print("collecting tools from MCP servers:")
+    request, skipped = collect_run(config, model=args.model, timeout=args.timeout)
+    Path(args.output).write_text(
+        json.dumps(request, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    print(f"wrote {args.output}: {len(request['tools'])} tool definitions")
+    if skipped:
+        # A partial collection understates the per-request cost, which is the one number
+        # this command exists to produce, so it must not look like a clean run.
+        print(f"incomplete: {len(skipped)} server(s) contributed nothing ({', '.join(skipped)})")
+        return 1
+    return 0
+
+
 def _cmd_lock(args: argparse.Namespace) -> int:
     payload = json.loads(Path(args.from_capture).read_text(encoding="utf-8"))
     request = payload.get("request", payload)
@@ -515,6 +534,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ci.set_defaults(func=_cmd_ci)
 
+    co = sub.add_parser("collect", help="read tool schemas out of your own MCP servers")
+    co.add_argument("config", help="MCP client config JSON with an mcpServers object")
+    co.add_argument("-o", "--output", required=True, help="where to write the request JSON")
+    co.add_argument("--model", default=DEFAULT_MODEL, help="model id to stamp on the request")
+    co.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT)
+    co.set_defaults(func=_cmd_collect)
+
     lt = sub.add_parser("lint", help="find tool-schema weight no tool call can reference")
     lt.add_argument("payload", help="path to a captured request JSON (or {request, response})")
     lt.add_argument("--model", help="override the model id")
@@ -582,6 +608,14 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _message(error: BaseException) -> str:
+    """OSError puts the errno in args[0], so reading args blindly reports \"error: 2\"."""
+    if isinstance(error, OSError):
+        return str(error)
+    first = error.args[0] if error.args else None
+    return first if isinstance(first, str) else str(error)
+
+
 def _force_utf8(stream: object) -> None:
     """Windows consoles still default to cp437/cp1252, which cannot encode `—` or `…`."""
     reconfigure = getattr(stream, "reconfigure", None)
@@ -608,8 +642,7 @@ def main(argv: list[str] | None = None) -> int:
         RuntimeError,
         json.JSONDecodeError,
     ) as error:
-        message = error.args[0] if error.args else error
-        print(f"error: {message}", file=sys.stderr)
+        print(f"error: {_message(error)}", file=sys.stderr)
         return 2
 
 

@@ -9,7 +9,7 @@ and the advice turns out to be aimed at the smaller half of the problem.
 Reproduce it:
 
 ```
-python tools/collect_mcp_tools.py your-config.json -o mine.json
+ctxprofile collect your-config.json -o mine.json
 python tools/tool_anatomy.py mine.json
 python tools/bpe_probe.py mine.json     # needs tiktoken
 ctxprofile analyze mine.json

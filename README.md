@@ -390,10 +390,11 @@ optional server needs `mcp`.
 ### Measure your own MCP servers
 
 The same extra ships a collector that connects to the servers in your MCP client
-config, reads their real tool schemas, and writes a request you can analyze:
+config, reads their real tool schemas, and writes a request you can analyze — no
+clone needed, it is a command:
 
 ```
-python tools/collect_mcp_tools.py your-mcp-config.json -o mine.json
+ctxprofile collect your-mcp-config.json -o mine.json
 ctxprofile analyze mine.json
 ```
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.16.0
+
+- `ctxprofile collect` — the MCP collector is a command instead of a script in the
+  repo. The README told a pip-installed user to run `tools/collect_mcp_tools.py`,
+  which a pip install does not have; measuring your own servers meant cloning
+  first. The script stays as an alias.
+- **The collector was broken against `mcp` 2.0.** The SDK renamed `Tool.inputSchema`
+  to `input_schema`, and the collector read only the old name, so every server
+  returned zero tools. Both spellings are read now, and a test covers both so the
+  existing compatibility matrix catches the next rename. Found by installing the
+  wheel into a clean venv and running the whole loop, which is the only place the
+  new SDK gets used — the dev environment still pins 1.27.
+- Errors name what went wrong. `OSError` keeps the errno in `args[0]`, so reading
+  `args` blindly turned a missing file into `error: 2`.
+
 ## 0.15.0
 
 - `mcp-audit` gains an `unreachable` column: the share of each server's bill that

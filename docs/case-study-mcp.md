@@ -15,7 +15,7 @@ Four servers, all public, all common:
 | sequential-thinking | `@modelcontextprotocol/server-sequential-thinking` |
 | playwright | `@playwright/mcp` |
 
-`tools/collect_mcp_tools.py` connects to each over stdio, lists its real tools,
+`ctxprofile collect` connects to each over stdio, lists its real tools,
 and writes them into an Anthropic-shaped request. Then:
 
 ```
@@ -81,7 +81,7 @@ In the trace above only the filesystem server was ever called. The other three â
 ```
 git clone https://github.com/Evge14n/ctxprofile && cd ctxprofile
 pip install -e ".[mcp]"
-python tools/collect_mcp_tools.py your-mcp-config.json -o mine.json
+ctxprofile collect your-mcp-config.json -o mine.json
 ctxprofile analyze mine.json
 ```
 
