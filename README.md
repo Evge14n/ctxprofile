@@ -147,29 +147,37 @@ ctxprofile analyze capture.json --online
 model: claude-opus-4-8   input tokens: 900   exact $ (reconciled to usage)
 
   component                      kind            tokens      %    $ cold  $ cached
-  write_file                     tool_def          234*  26.0%   0.00117   0.00012  [UNUSED]
-  web_search                     tool_def          221*  24.6%   0.00111   0.00011  [UNUSED]
-  read_file                      tool_def          180*  20.0%   0.00090   0.00009
-  system                         system             85*   9.4%   0.00043   0.00004
-  user[0]                        history            52    5.8%   0.00026   0.00003
-  assistant[1]                   history            42    4.7%   0.00021   0.00002
-  user[3]                        current_user       41    4.6%   0.00020   0.00002
-  tool_result[2]                 tool_result        38    4.2%   0.00019   0.00002
+  user[0]                        history           192   21.3%   0.00096   0.00010
+  assistant[1]                   history           154   17.1%   0.00077   0.00008
+  user[3]                        current_user      154   17.1%   0.00077   0.00008
+  tool_result[2]                 tool_result       141   15.7%   0.00071   0.00007
+  write_file                     tool_def           82*   9.1%   0.00041   0.00004  [UNUSED]
+  web_search                     tool_def           77*   8.6%   0.00039   0.00004  [UNUSED]
+  read_file                      tool_def           64*   7.1%   0.00032   0.00003
+  system                         system             29*   3.2%   0.00015   0.00001
   (tool block overhead)          tool_def            7*   0.8%   0.00003   0.00000
 
   * tokens measured with count_tokens (6 calls); unmarked rows are the ~4 chars/token estimate
   (tool block overhead) is what having any tools at all costs; removing one tool does not recover it
-  on the rows it could check, the estimate ran 70% below the measured value — the unmarked rows carry that kind of error
+  on the rows it could check, the estimate ran 15% below the measured value — the unmarked rows carry that kind of error
   total $ (cold, uncached upper bound): 0.00450
-  2 tools not called in this capture ($0.00228 at the cold rate if they are never called):
+  2 tools not called in this capture ($0.00080 at the cold rate if they are never called):
     web_search, write_file
 ```
 
-That is a real run of the command above on `examples/capture.json`, with the
-endpoint answered by the local stand-in from
-[tests/test_online_http.py](tests/test_online_http.py) — the token values are
-that stub's, not Anthropic's. With a key they come from the real tokenizer; the
-shape and the labelling are what you get either way.
+Reproduce that block exactly, without an API key:
+
+```
+python tools/stub_count_tokens.py ctxprofile analyze examples/capture.json --online
+```
+
+[That script](tools/stub_count_tokens.py) answers `count_tokens` locally, so the
+token values are a stand-in's rather than Anthropic's. With a real key they come
+from the real tokenizer; the shape and the labelling are what you get either way.
+A test regenerates this block and fails if it stops matching — an earlier version
+of this section cited a stub that did not produce the numbers shown, which is
+exactly the sort of thing that should not survive in a document about checkable
+measurement.
 
 Each `*` tool row is that tool's **leave-one-out marginal** — what you stop
 paying if you delete it. The shared tool-block overhead is a separate row rather
@@ -351,8 +359,15 @@ A schema carrying a `$dynamicRef`, or a `$ref` this linter cannot resolve, has i
 definitions left alone rather than guessed at.
 
 Deliberately **not** flagged: `additionalProperties` (7.2% of the corpus, but it
-changes validation under strict tool use), `default`, `title`, `examples`. The
-model can read those, so dropping them is a judgement call rather than a free win.
+changes validation under strict tool use) and `default`. The model can read those,
+so dropping them is a judgement call rather than a free win.
+
+This list used to include `title` and `examples` as well. That was wrong: the
+corpus has no `title` *annotation* — every `title` in it is a property name, a real
+tool argument, two of them required — and no `examples` at all. The number came
+from a throwaway script that read key names without checking whether they sat in a
+map of names to subschemas. The linter does check; the measuring script did not.
+[The survey](docs/mcp-tool-anatomy.md) carries the correction.
 
 `--write-slim out.json` writes the request with the removable weight stripped, so
 you can check the claim instead of taking it:

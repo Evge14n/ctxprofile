@@ -1,26 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="830" height="887" viewBox="0 0 830 887" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13">
-<rect width="830" height="887" rx="8" fill="#0d1117"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="830" height="488" viewBox="0 0 830 488" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13">
+<rect width="830" height="488" rx="8" fill="#0d1117"/>
 <path d="M0 8a8 8 0 0 1 8-8h814a8 8 0 0 1 8 8v26H0z" fill="#161b22"/>
 <circle cx="18" cy="17" r="6" fill="#ff5f57"/>
 <circle cx="36" cy="17" r="6" fill="#febc2e"/>
 <circle cx="54" cy="17" r="6" fill="#28c840"/>
 <text x="415" y="21" text-anchor="middle" fill="#8b949e" font-size="12">ctxprofile demo</text>
 <text x="18" y="64" fill="#c9d1d9" xml:space="preserve">sample: four public MCP servers, as their tool schemas were actually published</text>
-<text x="18" y="140" fill="#e6edf3" xml:space="preserve">model: claude-opus-4-8   input tokens: 8299   estimated (no usage block)</text>
-<text x="18" y="216" fill="#8b949e" xml:space="preserve">  component                      kind            tokens      %    $ cold  $ cached</text>
-<text x="18" y="254" fill="#d29922" xml:space="preserve">  mcp__sequentia…uentialthinking tool_def         1021   12.3%   0.00511   0.00051  [UNUSED]</text>
-<text x="18" y="292" fill="#d29922" xml:space="preserve">  mcp__playwrigh…take_screenshot tool_def          388    4.7%   0.00194   0.00019  [UNUSED]</text>
-<text x="18" y="330" fill="#d29922" xml:space="preserve">  mcp__playwrigh…owser_fill_form tool_def          283    3.4%   0.00142   0.00014  [UNUSED]</text>
-<text x="18" y="368" fill="#d29922" xml:space="preserve">  mcp__playwright__browser_drop  tool_def          255    3.1%   0.00128   0.00013  [UNUSED]</text>
-<text x="18" y="406" fill="#d29922" xml:space="preserve">  mcp__playwright__browser_find  tool_def          244    2.9%   0.00122   0.00012  [UNUSED]</text>
-<text x="18" y="444" fill="#d29922" xml:space="preserve">  mcp__playwright__browser_click tool_def          231    2.8%   0.00115   0.00012  [UNUSED]</text>
-<text x="18" y="482" fill="#d29922" xml:space="preserve">  mcp__playwright__browser_type  tool_def          224    2.7%   0.00112   0.00011  [UNUSED]</text>
-<text x="18" y="520" fill="#d29922" xml:space="preserve">  mcp__playwrigh…network_request tool_def          217    2.6%   0.00109   0.00011  [UNUSED]</text>
-<text x="18" y="558" fill="#8b949e" xml:space="preserve">  ... and 40 more components totalling 5,436 tokens</text>
-<text x="18" y="634" fill="#e6edf3" xml:space="preserve">  total $ (cold, uncached upper bound): 0.04150</text>
-<text x="18" y="672" fill="#d29922" xml:space="preserve">  46 tools not called in this capture ($0.04141 at the cold rate if they are never called):</text>
-<text x="18" y="710" fill="#c9d1d9" xml:space="preserve">    mcp__filesystem__create_directory, mcp__filesystem__directory_tree, mcp__filesystem__edit_file and 43 more</text>
-<text x="18" y="786" fill="#c9d1d9" xml:space="preserve">that is what those servers cost on every request, before anyone types a word.</text>
-<text x="18" y="824" fill="#c9d1d9" xml:space="preserve">632 of those tokens (8%) are schema no tool call can reference — ctxprofile lint says which</text>
-<text x="18" y="862" fill="#c9d1d9" xml:space="preserve">point it at your own: ctxprofile capture --out captures/   then analyze a capture</text>
+<text x="18" y="102" fill="#e6edf3" xml:space="preserve">model: claude-opus-4-8   input tokens: 8299   estimated (no usage block)</text>
+<text x="18" y="140" fill="#8b949e" xml:space="preserve">  component                      kind            tokens      %    $ cold  $ cached</text>
+<text x="18" y="159" fill="#d29922" xml:space="preserve">  mcp__sequentia…uentialthinking tool_def         1021   12.3%   0.00511   0.00051  [UNUSED]</text>
+<text x="18" y="178" fill="#d29922" xml:space="preserve">  mcp__playwrigh…take_screenshot tool_def          388    4.7%   0.00194   0.00019  [UNUSED]</text>
+<text x="18" y="197" fill="#d29922" xml:space="preserve">  mcp__playwrigh…owser_fill_form tool_def          283    3.4%   0.00142   0.00014  [UNUSED]</text>
+<text x="18" y="216" fill="#d29922" xml:space="preserve">  mcp__playwright__browser_drop  tool_def          255    3.1%   0.00128   0.00013  [UNUSED]</text>
+<text x="18" y="235" fill="#d29922" xml:space="preserve">  mcp__playwright__browser_find  tool_def          244    2.9%   0.00122   0.00012  [UNUSED]</text>
+<text x="18" y="254" fill="#d29922" xml:space="preserve">  mcp__playwright__browser_click tool_def          231    2.8%   0.00115   0.00012  [UNUSED]</text>
+<text x="18" y="273" fill="#d29922" xml:space="preserve">  mcp__playwright__browser_type  tool_def          224    2.7%   0.00112   0.00011  [UNUSED]</text>
+<text x="18" y="292" fill="#d29922" xml:space="preserve">  mcp__playwrigh…network_request tool_def          217    2.6%   0.00109   0.00011  [UNUSED]</text>
+<text x="18" y="311" fill="#8b949e" xml:space="preserve">  ... and 40 more components totalling 5,436 tokens</text>
+<text x="18" y="349" fill="#e6edf3" xml:space="preserve">  total $ (cold, uncached upper bound): 0.04150</text>
+<text x="18" y="368" fill="#d29922" xml:space="preserve">  46 tools not called in this capture ($0.04141 at the cold rate if they are never called):</text>
+<text x="18" y="387" fill="#c9d1d9" xml:space="preserve">    mcp__filesystem__create_directory, mcp__filesystem__directory_tree, mcp__filesystem__edit_file and 43 more</text>
+<text x="18" y="425" fill="#c9d1d9" xml:space="preserve">that is what those servers cost on every request, before anyone types a word.</text>
+<text x="18" y="444" fill="#c9d1d9" xml:space="preserve">632 of those tokens (8%) are schema no tool call can reference — ctxprofile lint says which</text>
+<text x="18" y="463" fill="#c9d1d9" xml:space="preserve">point it at your own: ctxprofile capture --out captures/   then analyze a capture</text>
 </svg>

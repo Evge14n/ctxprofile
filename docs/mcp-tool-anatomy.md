@@ -140,11 +140,27 @@ and a test in the repo asserts that round trip. The slimmed corpus was also
 checked for dangling `$ref` targets and for any change to `type`, `properties`,
 `required` or `additionalProperties` — there were none.
 
-Three further candidates were measured and deliberately **not** flagged:
+Two further candidates were measured and deliberately **not** flagged:
 `additionalProperties` (3,728 tokens, 7.2% — but it changes validation under
-strict tool use), `default` (318) and `title` (108). The model can read those,
-so dropping them is a judgement call rather than a free win, and a linter that
-mixes the two kinds of advice is worth less than one that does not.
+strict tool use) and `default` (318). The model can read those, so dropping them
+is a judgement call rather than a free win, and a linter that mixes the two kinds
+of advice is worth less than one that does not.
+
+An earlier version of this paragraph also listed `title` at 108 tokens and
+`examples` at zero, described the same way. Both were wrong, and the way they were
+wrong is worth stating because it is the exact failure the linter is built to
+avoid. The 108 tokens came from deleting every key literally named `title`. This
+corpus contains **no** `title` annotation at all: all five are property *names*
+under `properties` — real tool arguments — and two of them are **required**
+(`create_issue.title`, `create_pull_request.title`). Calling their removal "a
+judgement call" was advice that would have broken those tools outright. `examples`
+never occurs here, so there was nothing to measure and reporting a zero implied
+otherwise.
+
+The linter itself gets this right: it knows which keywords hold a map of names to
+subschemas and does not read those names as keywords. The throwaway script used to
+produce the paragraph did not. Measuring with a walker that is more careless than
+the tool you are writing about is a good way to publish a number backwards.
 
 ## The cost is not spread evenly
 
