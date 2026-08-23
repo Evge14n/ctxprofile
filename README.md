@@ -215,15 +215,26 @@ churn   model: claude-opus-4-8   4 captures   1 rebuilds   ttl assumed 5m
   total excess over cache reads: 0.01058
 ```
 
-Appending a message is not a divergence — a conversation that only grew keeps its
-cached prefix, so the common case is correctly silent. When nothing changed, this
-refuses to invent a culprit: an unchanged prefix after longer than the TTL is
-reported as `ttl expiry`, and one inside the TTL as `unexplained`. Switching model
-gets its own label, because caches are model-scoped.
+**A rebuild is decided from `cache_read_input_tokens`, not from the fact that
+something was written.** Every ordinary turn writes its newly appended suffix to
+cache — that is the cache working, not churn. Only tokens that *were* cached and
+were not served again count as rebuilt, so a healthy conversation reports nothing
+and costs nothing, however much it appends.
+
+The rest follows from that. Appending a message is not a divergence. Moving a
+`cache_control` breakpoint forward — the documented multi-turn pattern — is not a
+content change, because the marker says where the prefix breaks and is not part of
+it. Removing a component is named as a removal (`alpha removed`) rather than as
+whatever slid into its slot, which is byte-identical in both captures and would be
+the wrong thing to go and look at. When nothing changed, this refuses to invent a
+culprit: an unchanged prefix after longer than the TTL is `ttl expiry` — and the
+TTL comes from the request when it declares a 1-hour cache, not from a hardcoded
+five minutes — while one inside the TTL is `unexplained`. Switching model gets its
+own label, because caches are model-scoped.
 
 The excess column is the honest number: what the rebuild cost *above* what a hit
-would have cost, not the whole write. Needs captures that carry `captured_at` and
-a `usage` block — which is what `ctxprofile capture` writes.
+would have cost, over only the previously cached part. Needs captures that carry
+`captured_at` and a `usage` block — which is what `ctxprofile capture` writes.
 
 ## Lock the context floor and gate it in CI
 

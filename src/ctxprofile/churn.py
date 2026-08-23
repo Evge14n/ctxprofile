@@ -10,6 +10,11 @@ differ — and appending a message, which is what a conversation does constantly
 a difference. Where nothing differs, this refuses to invent a reason: an unchanged
 prefix after a long gap is a TTL expiry, and an unchanged prefix inside the TTL is
 reported as unexplained rather than blamed on something.
+
+Whether a rebuild happened at all is read from `cache_read_input_tokens`, not from
+the presence of a write. Every turn writes its newly appended suffix; those tokens
+were never cacheable before and cost the write rate regardless. Only previously
+cached tokens that were not served again were rebuilt, and only those are charged.
 """
 
 from __future__ import annotations
@@ -50,8 +55,24 @@ class ChurnReport:
     ttl_seconds: float
 
 
+def _without_cache_control(value: Any) -> Any:
+    """`cache_control` marks where the prefix breaks; it is not prefix content.
+
+    The documented multi-turn pattern rotates the ephemeral marker onto the newest
+    turn and drops it from the older one. The text does not change, so digesting the
+    marker would report every ordinary turn as an edit to a message nobody touched.
+    """
+    if isinstance(value, dict):
+        return {k: _without_cache_control(v) for k, v in value.items() if k != "cache_control"}
+    if isinstance(value, list):
+        return [_without_cache_control(item) for item in value]
+    return value
+
+
 def _digest(value: Any) -> str:
-    text = json.dumps(value, sort_keys=True, ensure_ascii=False, default=str)
+    text = json.dumps(
+        _without_cache_control(value), sort_keys=True, ensure_ascii=False, default=str
+    )
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
@@ -71,25 +92,76 @@ def prefix_signature(request: dict[str, Any]) -> Signature:
 
 
 def first_divergence(before: Signature, after: Signature) -> tuple[str, str] | None:
-    """The first entry that changed, named as it stands now.
+    """The first place the cacheable prefix stops matching, named from the side that moved.
 
-    Zipping stops at the shorter side on purpose: a conversation that only grew has no
-    divergence, and its cached prefix is still valid.
+    Walking past the end of `after` is not a match failure in the other direction: a
+    conversation that only grew keeps its cached prefix, so running out of `before`
+    means nothing diverged. But a component *removed* from the prefix shifts everything
+    after it, and naming whatever slid into that slot would point at a component that is
+    byte-identical in both captures.
     """
-    for old, new in zip(before, after, strict=False):
-        if old != new:
-            return new[0], new[1]
+    present_before = {(kind, name) for kind, name, _ in before}
+    present_after = {(kind, name) for kind, name, _ in after}
+    for index, old in enumerate(before):
+        if index >= len(after):
+            return old[0], f"{old[1]} removed"
+        new = after[index]
+        if old == new:
+            continue
+        old_key, new_key = (old[0], old[1]), (new[0], new[1])
+        if old_key == new_key:
+            return old[0], old[1]  # same component, different content
+        left, arrived = old_key not in present_after, new_key not in present_before
+        if left and arrived:
+            return old[0], f"{old[1]} -> {new[1]}"  # this slot holds something else now
+        if left:
+            return old[0], f"{old[1]} removed"
+        if arrived:
+            return new[0], f"{new[1]} inserted"
+        return new[0], new[1]  # both still present: the prefix was reordered
     return None
 
 
 def _excess_usd(tokens: int, model: str, usage: dict[str, Any]) -> float:
-    """What the rebuild cost above what a cache hit would have cost."""
+    """What re-writing `tokens` cost above what reading them from cache would have."""
     split = usage.get("cache_creation") or {}
-    write_1h = int(split.get("ephemeral_1h_input_tokens", 0) or 0)
-    write_5m = int(split.get("ephemeral_5m_input_tokens", 0) or 0) or max(0, tokens - write_1h)
+    write_1h = min(int(split.get("ephemeral_1h_input_tokens", 0) or 0), tokens)
+    write_5m = max(0, tokens - write_1h)
     written = pricing.billed_input_usd(model, 0, write_5m, write_1h, 0)
     if_it_had_hit = pricing.billed_input_usd(model, 0, 0, 0, tokens)
     return written - if_it_had_hit
+
+
+def _cached(usage: dict[str, Any]) -> tuple[int, int]:
+    """(served from cache, written to cache) for one request."""
+    return (
+        int(usage.get("cache_read_input_tokens", 0) or 0),
+        int(usage.get("cache_creation_input_tokens", 0) or 0),
+    )
+
+
+def declared_ttl(request: dict[str, Any], default: float) -> float:
+    """The longest cache lifetime the request itself asks for.
+
+    A one-hour breakpoint that rebuilds after six minutes has not expired, and calling
+    it a TTL expiry excuses a real invalidation.
+    """
+    longest = default
+
+    def visit(node: Any) -> None:
+        nonlocal longest
+        if isinstance(node, dict):
+            control = node.get("cache_control")
+            if isinstance(control, dict) and str(control.get("ttl", "")).strip() == "1h":
+                longest = max(longest, 3600.0)
+            for value in node.values():
+                visit(value)
+        elif isinstance(node, list):
+            for item in node:
+                visit(item)
+
+    visit(request)
+    return longest
 
 
 def _usable(captures: list[dict[str, Any]]) -> list[tuple[datetime, str, dict[str, Any], dict[str, Any]]]:
@@ -122,11 +194,17 @@ def analyze_churn(
 
     events: list[ChurnEvent] = []
     total = 0.0
-    for (previous_when, _, previous, _), (when, at, request, usage) in pairwise(rows):
-        rebuilt = int(usage.get("cache_creation_input_tokens", 0) or 0)
+    for (previous_when, _, previous, previous_usage), (when, at, request, usage) in pairwise(rows):
+        read, created = _cached(usage)
+        previously_cached = sum(_cached(previous_usage))
+        # Tokens appended past the old prefix were never cacheable, so writing them is
+        # the cache working. Only previously cached tokens that were NOT served again
+        # were rebuilt — and if none were, the prefix held and nothing churned.
+        rebuilt = min(max(0, previously_cached - read), created)
         if rebuilt <= 0:
             continue
         gap = (when - previous_when).total_seconds()
+        ttl = declared_ttl(request, ttl_seconds)
         this_model = str(request.get("model") or model)
         kind = ""
         if str(previous.get("model") or this_model) != this_model:
@@ -135,7 +213,7 @@ def analyze_churn(
             divergence = first_divergence(prefix_signature(previous), prefix_signature(request))
             if divergence:
                 kind, cause = divergence
-            elif gap > ttl_seconds:
+            elif gap > ttl:
                 cause = "ttl expiry"
             else:
                 cause = "unexplained"
